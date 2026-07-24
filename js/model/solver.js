@@ -62,6 +62,14 @@ export function fitSpacerHeight(frame, stemLength, stemAngle, target) {
 }
 
 /**
+ * A solution wanting a negative spacer stack is not a build at all — the front end is
+ * already taller than the target with the stem slammed, and nothing un-stacks a headset.
+ * Half a millimetre of slack, because rounding to whole spacers is what lands a solution
+ * just the wrong side of zero.
+ */
+export const needsNegativeSpacers = solution => solution.exactSpacerHeight < -0.5;
+
+/**
  * Every stem in the catalogue tried at every angle, both ways up, best first.
  * Ranked by: reachable at all, then smallest miss, then least angle, then fewest spacers.
  */
@@ -79,7 +87,7 @@ export function stemSolutions(frame) {
       const fit = fitSpacerHeight(frame, stemLength, stemAngle, target);
       const warnings = [];
 
-      if (fit.exactSpacerHeight < -0.5)
+      if (needsNegativeSpacers(fit))
         warnings.push(`front end too tall - needs ${oneDecimal(-fit.exactSpacerHeight)}mm below zero`);
       if (fit.spacerHeight > frame.spacersAvailable + 1e-9)
         warnings.push(`over spacer limit (${whole(frame.spacersAvailable)}mm)`);
@@ -95,7 +103,7 @@ export function stemSolutions(frame) {
         stemLength,
         stemAngle,
         warnings,
-        reachable: fit.exactSpacerHeight >= -0.5 && fit.spacerHeight <= frame.spacersAvailable + 1e-9,
+        reachable: !needsNegativeSpacers(fit) && fit.spacerHeight <= frame.spacersAvailable + 1e-9,
       });
     }
   }

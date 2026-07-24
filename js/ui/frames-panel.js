@@ -6,7 +6,7 @@ import { oneDecimal, whole, signedOneDecimal } from '../lib/format.js';
 import { state } from '../state.js';
 import { createFrame, newFrameId } from '../model/frame.js';
 import { normaliseStandover } from '../model/standover.js';
-import { stemSolutions, saddleSetup, isMatch } from '../model/solver.js';
+import { stemSolutions, saddleSetup, isMatch, needsNegativeSpacers } from '../model/solver.js';
 import { numberField, textField, readoutCell, chip, table } from './fields.js';
 
 /** A numeric field on a frame; the field path is scoped by frame id. */
@@ -86,23 +86,26 @@ function geometryFields(frame, onChange, onNameChange) {
   );
 }
 
-/** The ranked stem table. Unreachable rows show the spacer height they would need. */
+/**
+ * The ranked stem table. Combinations that would need a negative spacer stack are left out
+ * entirely rather than listed with an impossible number in the spacer column — they are not
+ * options. Rows that survive can still be over the frame's spacer limit, which is a real
+ * thing to know about, and their spacer figure means something.
+ */
 function stemOptionsTable(solutions, best) {
-  const shown = solutions.slice(0, Math.max(1, state.options.solutionsPerFrame));
+  const possible = solutions.filter(solution => !needsNegativeSpacers(solution));
+  const shown = possible.slice(0, Math.max(1, state.options.solutionsPerFrame));
+  // `best` is the pick across everything, so it can be one of the rows just dropped. When
+  // it is, highlight the best row that is actually buildable instead of nothing.
+  const highlight = shown.includes(best) ? best : shown[0];
 
   const rows = shown.map(solution =>
     element(
       'tr',
-      { class: solution === best ? 'best' : '' },
+      { class: solution === highlight ? 'best' : '' },
       element('td', {}, `${whole(solution.stemLength)}mm`),
       element('td', {}, signedOneDecimal(solution.stemAngle)),
-      element(
-        'td',
-        {},
-        solution.reachable
-          ? `${oneDecimal(solution.spacerHeight)}mm`
-          : `${oneDecimal(solution.exactSpacerHeight)}mm`,
-      ),
+      element('td', {}, `${oneDecimal(solution.spacerHeight)}mm`),
       element('td', {}, signedOneDecimal(solution.dx)),
       element('td', {}, signedOneDecimal(solution.dy)),
       element('td', {}, oneDecimal(solution.missMm)),
@@ -117,11 +120,27 @@ function stemOptionsTable(solutions, best) {
   );
 
   const headings = ['Stem', 'Angle', 'Spacers', 'd reach', 'd height', 'Miss', 'Notes'];
+
+  // Nothing left means the bar has to sit below the frame's own slammed height. Say by how
+  // much, since that is the number that tells you whether a different frame would fix it.
+  const tallestShortfall = solutions.length
+    ? Math.max(...solutions.map(solution => solution.exactSpacerHeight))
+    : 0;
+
   return element(
     'div',
     { style: 'margin-top:14px' },
     element('h3', {}, 'Stem options'),
-    element('div', { class: 'scroll' }, table(headings, rows)),
+    possible.length
+      ? element('div', { class: 'scroll' }, table(headings, rows))
+      : element(
+          'div',
+          { class: 'warnbox' },
+          `Nothing in the catalogue works: this frame's front end is already too tall. The closest ` +
+            `combination still sits ${oneDecimal(-tallestShortfall)}mm above the target with the stem ` +
+            `slammed, so it would need spacers below zero. A lower stack or a steeper negative stem angle ` +
+            `is what fixes it.`,
+        ),
   );
 }
 
@@ -154,12 +173,18 @@ function saddleSection(frame) {
   );
 }
 
-/** The "as currently built" fields, only needed to use this frame as a reference. */
+/**
+ * The "as currently built" fields — what is actually bolted to this bike today, as opposed
+ * to what the solver is proposing. Two things read them: calibration references (section 2)
+ * and the reverse setup (section 6), so the summary has to say both. It used to say
+ * "needed only" for calibration, which sent anyone looking for section 6's input straight
+ * past it.
+ */
 function asBuiltSection(frame, onChange) {
   return element(
     'details',
-    {},
-    element('summary', {}, 'As currently built - needed only to use this frame as a calibration reference'),
+    { open: true },
+    element('summary', {}, 'As currently built - what this bike has on it now (feeds calibration and the reverse setup)'),
     element(
       'div',
       { class: 'grid cols3' },

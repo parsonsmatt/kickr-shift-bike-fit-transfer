@@ -11,7 +11,7 @@ import { createFrame, barClampPosition, railClampPosition, steererUp, asBuiltPos
 import { carriagePosition, carriageReadings, targetPositions, standoverOffsetFor, standoverTravelFor } from '../js/model/fit-bike.js';
 import { trainerSetups } from '../js/model/reverse.js';
 import { standoverOffset, STANDOVER_POSITIONS } from '../js/model/standover.js';
-import { stemSolutions, bestStemSolution, saddleSetup, targetBarClamp, targetRailClamp, fitSpacerHeight } from '../js/model/solver.js';
+import { stemSolutions, bestStemSolution, saddleSetup, targetBarClamp, targetRailClamp, fitSpacerHeight, needsNegativeSpacers } from '../js/model/solver.js';
 import { fitCarriage, residuals, worstResidual, solveConstants, referenceObservations } from '../js/model/calibration.js';
 
 const log = [];
@@ -114,6 +114,19 @@ near('but the spacer stack is clamped at zero', Math.min(0, wantsNegative.spacer
 const quantised = stemSolutions(frame).every(s =>
   Math.abs(s.spacerHeight / state.options.spacerStep - Math.round(s.spacerHeight / state.options.spacerStep)) < 1e-9);
 check('every spacer stack is a whole number of spacers', quantised);
+
+// The model keeps the impossible options — the UI is what hides them — so both flips of an
+// angle must still be generated here, and needsNegativeSpacers must be what picks them out.
+state.options.stemLengths = '100';
+state.options.stemAngles = '6';
+const bothFlips = stemSolutions(frame);
+check('each angle is tried both ways up', bothFlips.length === 2);
+check('and the two flips are +6 and -6',
+  bothFlips.map(s => s.stemAngle).sort((a, b) => a - b).join(',') === '-6,6');
+check('needsNegativeSpacers agrees with the spacer figure it would need',
+  bothFlips.every(s => needsNegativeSpacers(s) === (s.exactSpacerHeight < -0.5)));
+check('and never fires on a solution marked reachable',
+  bothFlips.every(s => !(s.reachable && needsNegativeSpacers(s))));
 
 // Spacers move the bar up the steerer, so more spacers must mean a higher bar.
 const low = barClampPosition(frame, 10, 100, -6);

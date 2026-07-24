@@ -71,11 +71,22 @@ built* stem/spacers/saddle figures that a calibration reference uses.
 
 Standover makes that answer a family rather than a single set of numbers: it translates
 both carriages together, so **every one of the eight positions has an exact set of
-readings**, and geometrically none is more correct than another. Section 6 lists all eight
-and marks the usable ones. Since the scales' travel is not recorded anywhere, the only test
-it can apply is that a scale cannot read below its own zero mark — so a negative reading
-rules a row *out*, but nothing rules a row *in*; a row can still ask for more travel than
-the machine has at the top. On the default frame that leaves A–F usable and rules out G–H.
+readings**, and geometrically none is more correct than another. Something has to choose, so
+section 6 takes the **lowest position that stays on the scales** and lists the rest below it.
+
+Since the scales' travel is not recorded anywhere, the only test it can apply is that a
+scale cannot read below its own zero mark — so a negative reading rules a position *out*,
+but nothing rules one *in*; a position can still ask for more travel than the machine has at
+the top. Raising the standover *reduces* the reading needed to reach a fixed point, so
+running off the bottom is a high-letter problem: "lowest that fits" is therefore A unless
+the position you are copying sits below a carriage's own zero mark. On the default frame
+A–F are usable and G–H are not. Recording each scale's actual travel is what would turn
+this from a one-sided check into a real range check.
+
+Section 6 also prints the *as built* figures it derived everything from. Those live in a
+collapsed panel on the frame card, and the summary used to read "needed only to use this
+frame as a calibration reference" — which sent anyone looking for section 6's input straight
+past it. It now names both readers and starts open.
 
 ## Files
 
@@ -136,6 +147,7 @@ Names used throughout, in case a term is unfamiliar:
 | `exactSpacerHeight` | What the steerer axis wants before rounding to whole spacers. Negative means the front end is already too tall. |
 | `missMm` | Straight-line distance from where the bar clamp lands to where it should be. |
 | `reachable` | The solution needs no negative spacers and no more than the frame has. |
+| `needsNegativeSpacers` | The bar would have to sit below the frame's own slammed height. Not a build, so the stem table leaves these out entirely rather than printing a negative spacer stack. If a frame has nothing left, the card says how far above the target its closest option still sits. The model keeps them — the ranking already sorts them last — so only the display filters. |
 | `railClamp` | Centre of the saddle rail clamp — what the fit bike's saddle carriage actually locates. |
 | `railsBelowSaddleTop` | Saddle shell stack: rail centre to the top of the saddle. |
 | `railOffset` | How far back from rail centre the saddle must slide, after the fitted post's setback is used up. |
@@ -154,7 +166,7 @@ python3 -m http.server 8000
 # then open http://localhost:8000/tests/
 ```
 
-It runs all three suites and prints a tally (214 checks at the time of writing). Each
+It runs all three suites and prints a tally (226 checks at the time of writing). Each
 suite is also a standalone page if you want to read one in isolation.
 
 | Suite | Covers |

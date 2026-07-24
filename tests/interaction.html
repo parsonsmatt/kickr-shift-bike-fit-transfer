@@ -240,8 +240,13 @@ try {
   /* ---- 13. options feed the solver ---- */
   type($('[data-option="stemLengths"]'), '100');
   type($('[data-option="stemAngles"]'), '6');
-  const firstCardRows = () => $$('#frame-list > .bike:first-child table tbody tr').length;
-  check('catalogue of one length x two flips', firstCardRows(), 2);
+  const firstCardTableRows = () => $$('#frame-list > .bike:first-child table tbody tr');
+  const firstCardRows = () => firstCardTableRows().length;
+  // One length and one angle is two combinations, since each angle is tried both ways up —
+  // but only those that do not need negative spacers are listed, so this is an upper bound.
+  check('catalogue of one length x two flips', firstCardRows() >= 1 && firstCardRows() <= 2, true);
+  check('every option listed is the length asked for',
+        firstCardTableRows().every(row => row.children[0].textContent === '100mm'), true);
   type($('[data-option="solutionsPerFrame"]'), '1');
   check('solutions shown honours the limit', firstCardRows(), 1);
 
@@ -256,16 +261,25 @@ try {
   // untouched "as built" figures. The end-to-end claim: apply the readings this section
   // produces and the app should solve that same frame straight back to the stem, angle and
   // spacers it says it is already built with.
-  const reverseRows = () => $$('#reverse-table tbody tr');
-  check('a row per standover position', reverseRows().length, 8);
-  check('reverse table names the highlighted frame', /Frame A/.test($('#reverse-label').textContent), true);
+  const reverseRows = () => $$('#reverse-panel tbody tr');
+  check('every standover position is listed under the chosen one', reverseRows().length, 8);
+  check('reverse panel names the highlighted frame', /Frame A/.test($('#reverse-label').textContent), true);
+  check('the source figures are spelled out so they can be found and changed',
+        /Read off Frame A as built: 100.0mm stem at -6.0 deg/.test($('#reverse-panel').textContent), true);
   note('standover positions on the scales',
        reverseRows().filter(r => /on scale/.test(r.textContent)).map(r => r.children[0].textContent));
 
+  // The single answer is a readout strip, and the rule is the lowest position that fits.
+  const chosenCells = () => $$('#reverse-panel .readout .v').map(n => n.textContent);
   const onScale = reverseRows().filter(row => /on scale/.test(row.textContent));
   check('at least one standover position is on the scales', onScale.length > 0, true);
+  check('the chosen standover is the lowest one that fits',
+        chosenCells()[0], onScale[0].children[0].textContent);
+  check('the chosen readings match that row',
+        chosenCells().slice(1), [1, 2, 3, 4].map(i => onScale[0].children[i].textContent));
+  note('chosen setup', chosenCells());
 
-  onScale[0].querySelector('button').click();
+  buttonByText('Use these readings').click();
   const compareCells = () => $$('#compare-table tbody tr')[0].children;
   note('solved back to', [6, 7, 8, 9, 10].map(i => compareCells()[i].textContent));
   check('applying the readings solves back to the built stem', compareCells()[6].textContent, '100mm');
@@ -279,6 +293,21 @@ try {
         $('[data-reading="saddleHeight"]').value !== '15.2', true);
   check('the applied row is marked in use',
         /in use/.test(reverseRows().find(r => r.classList.contains('best')).textContent), true);
+
+  /* ---- 16. options needing negative spacers are not offered at all ---- */
+  // The spacer column used to print the negative stack an unreachable option would need,
+  // which is not a build — nothing un-stacks a headset.
+  const stemRows = () => $$('#frame-list > .bike:first-child table tbody tr');
+  check('no option is listed with a negative spacer stack',
+        stemRows().every(row => !row.children[2].textContent.startsWith('-')), true);
+
+  type($('[data-path$=".stack"]'), '900');
+  check('a front end that cannot come down says so instead of listing absurd options',
+        /front end is already too tall/.test($('#frame-list').textContent), true);
+  check('and offers no stem rows at all', stemRows().length, 0);
+  check('the message quantifies the shortfall',
+        /still sits [0-9]+\.[0-9]mm above the target/.test($('#frame-list .warnbox').textContent), true);
+  note('too-tall message', $('#frame-list .warnbox').textContent.slice(0, 95));
 } catch (error) {
   log.push('THREW ' + (error && error.stack ? error.stack : error));
 }

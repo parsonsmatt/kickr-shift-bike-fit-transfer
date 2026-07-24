@@ -50,3 +50,14 @@ export function trainerSetups(frame) {
     return { ...readings, onScale: scaleKeys.every(key => readings[key] >= 0) };
   }).filter(Boolean);
 }
+
+/**
+ * The one to use, on the rule that we want the lowest standover height that works. Rows
+ * come back in A..H order, so that is just the first one on the scales.
+ *
+ * Worth knowing which way this leans: raising the standover raises both carriages, so it
+ * *reduces* the reading needed to reach a fixed point. Running off the bottom of a scale is
+ * therefore a high-letter problem, and the lowest position that works is A unless the
+ * position you are copying sits below the carriage's own zero mark. Null when nothing fits.
+ */
+export const lowestStandoverSetup = frame => trainerSetups(frame).find(row => row.onScale) || null;
