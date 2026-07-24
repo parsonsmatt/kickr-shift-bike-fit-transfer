@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>migrate</title></head>
+<body>
+<pre id="results">running</pre>
+<script type="module">
+const log = [];
+const check = (label, got, want) => {
+  const ok = JSON.stringify(got) === JSON.stringify(want);
+  log.push(`${ok ? 'ok  ' : 'FAIL'} ${label}${ok ? '' : `  got=${JSON.stringify(got)} want=${JSON.stringify(want)}`}`);
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+// A save written by the previous single-file version: old field names, conv:2, a tweaked
+// fit bike, two frames and a calibration reference pointing at one of them by id.
+const OLD_SAVE = {
+  read: { standover: 'C', sh: 16.8, sf: 5.4, bh: 10.2, br: 5.1 },
+  conv: 2,
+  kk: {
+    saddle: { x0: -215.4, y0: 480.2, aAngle: 71.5, aGain: 9.8, bAngle: 2, bGain: -10 },
+    bar: { x0: 418.9, y0: 545.1, aAngle: 89, aGain: 10.4, bAngle: -1.5, bGain: 10 },
+  },
+  fit: { crank: 172.5, railDrop: 47, noseToClamp: 128, barModelReach: 80, matchMode: 'hoods' },
+  opt: { lengths: '70,80,90,100,110', angles: '0,6,10,17', spacerStep: 5,
+         minLen: 70, maxLen: 110, maxAngle: 17, topN: 3, tol: 3 },
+  bikes: [
+    { id: 'b1_abcd', name: 'Old Roadie', size: '56', stack: 578, reach: 386, hta: 72.5, sta: 73.5,
+      headset: 12, stemStack: 38, barReach: 80, maxSpacers: 30, crank: 172.5, postSetback: 15,
+      railRange: 22, seatTube: 530, bStem: 110, bAngle: -6, bSpacers: 25, bSaddleH: 728, bRail: 4,
+      open: true },
+    { id: 'b2_efgh', name: 'Old Gravel', size: 'L', stack: 620, reach: 380, hta: 71, sta: 74,
+      headset: 18, stemStack: 40, barReach: 85, maxSpacers: 45, crank: 175, postSetback: 0,
+      railRange: 25, seatTube: 0, bStem: 90, bAngle: 8, bSpacers: 10, bSaddleH: 742, bRail: -6,
+      open: false },
+  ],
+  cal: [{ bikeId: 'b1_abcd', standover: 'B', sh: 15.5, sf: 6.2, bh: 9.8, br: 4.6 }],
+  activeId: 'b2_efgh',
+};
+
+try {
+  localStorage.clear();
+  localStorage.setItem('fit-transfer-v2', JSON.stringify(OLD_SAVE));
+
+  const html = await fetch('../index.html').then(r => r.text());
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  const results = $('#results');
+  document.body.innerHTML = parsed.body.innerHTML;
+  document.body.append(results);
+  await import('../js/main.js');
+  for (let i = 0; i < 60 && !$('#frame-list').children.length; i++) await sleep(50);
+
+  check('restored, not a new session', $('#save-status').textContent, 'restored from this browser');
+
+  // Readings and fit bike settings came across.
+  check('standover', $('[data-reading="standover"]').value, 'C');
+  check('saddle height reading', $('[data-reading="saddleHeight"]').value, '16.8');
+  check('saddle fore/aft reading', $('[data-reading="saddleForeAft"]').value, '5.4');
+  check('bar height reading', $('[data-reading="barHeight"]').value, '10.2');
+  check('bar reach reading', $('[data-reading="barReach"]').value, '5.1');
+  check('crank length', $('[data-fit-bike="crankLength"]').value, '172.5');
+  check('rails below saddle top', $('[data-fit-bike="railsBelowSaddleTop"]').value, '47');
+  check('nose to rail centre', $('[data-fit-bike="noseToRailCentre"]').value, '128');
+  check('match mode', $('[data-fit-bike="matchMode"]').value, 'hoods');
+
+  // Carriage constants, under their new names.
+  check('saddle zeroX', $('[data-path="carriages.saddle.zeroX"]').value, '-215.4');
+  check('saddle zeroY', $('[data-path="carriages.saddle.zeroY"]').value, '480.2');
+  check('saddle mastAngle kept (conv 2, no flip)', $('[data-path="carriages.saddle.mastAngle"]').value, '71.5');
+  check('saddle mastMmPerUnit', $('[data-path="carriages.saddle.mastMmPerUnit"]').value, '9.8');
+  check('saddle slideTilt', $('[data-path="carriages.saddle.slideTilt"]').value, '2');
+  check('saddle slideMmPerUnit (negative kept)', $('[data-path="carriages.saddle.slideMmPerUnit"]').value, '-10');
+  check('bar mastAngle', $('[data-path="carriages.bar.mastAngle"]').value, '89');
+  check('bar slideTilt', $('[data-path="carriages.bar.slideTilt"]').value, '-1.5');
+
+  // Options.
+  check('stem lengths', $('[data-option="stemLengths"]').value, '70,80,90,100,110');
+  check('stem angles', $('[data-option="stemAngles"]').value, '0,6,10,17');
+  check('spacer step', $('[data-option="spacerStep"]').value, '5');
+  check('max stem angle', $('[data-option="maxStemAngle"]').value, '17');
+  check('solutions per frame', $('[data-option="solutionsPerFrame"]').value, '3');
+  check('tolerance', $('[data-option="toleranceMm"]').value, '3');
+
+  // Frames, including the collapsed/expanded flag and the as-built numbers.
+  const rows = $$('#compare-table tbody tr');
+  check('two frames in compare', rows.length, 2);
+  check('frame names and sizes', rows.map(r => [r.children[0].textContent, r.children[1].textContent]),
+        [['Old Roadie', '56'], ['Old Gravel', 'L']]);
+  check('frame geometry carried over', rows.map(r => [2, 3, 4, 5].map(i => r.children[i].textContent)),
+        [['578', '386', '72.5', '73.5'], ['620', '380', '71.0', '74.0']]);
+  check('first card expanded, second collapsed',
+        $$('#frame-list > .bike').map(c => c.querySelectorAll('input').length > 0), [true, false]);
+  check('as-built stem length', $('[data-path="b1_abcd.builtStemLength"]').value, '110');
+  check('as-built spacers', $('[data-path="b1_abcd.builtSpacerHeight"]').value, '25');
+  check('as-built saddle height', $('[data-path="b1_abcd.builtSaddleHeight"]').value, '728');
+  check('as-built rail offset', $('[data-path="b1_abcd.builtRailOffset"]').value, '4');
+  check('rail travel', $('[data-path="b1_abcd.railTravel"]').value, '22');
+  check('headset stack', $('[data-path="b1_abcd.headsetStack"]').value, '12');
+  check('seatpost setback', $('[data-path="b1_abcd.seatpostSetback"]').value, '15');
+
+  // The calibration reference still points at its frame by id.
+  const referenceRow = $('#reference-table tbody tr');
+  check('reference resolved to its frame', referenceRow.children[0].textContent, 'Old Roadie - 56');
+  check('reference standover', referenceRow.querySelector('select').value, 'B');
+  check('reference readings', $$('#reference-table tbody input').map(i => i.value), ['15.5', '6.2', '9.8', '4.6']);
+
+  // The active frame is still the one that was highlighted.
+  check('active frame still highlighted', $('#side-view-label').textContent, 'Old Gravel - L');
+
+  // Loading alone does not write; the old save is left alone until something changes.
+  await sleep(400);
+  check('untouched until first edit', 'conv' in JSON.parse(localStorage.getItem('fit-transfer-v2')), true);
+
+  // Rewritten in the new schema on the next save.
+  const reading = $('[data-reading="saddleHeight"]');
+  reading.value = '17.0';
+  reading.dispatchEvent(new Event('input', { bubbles: true }));
+  await sleep(400);
+  const rewritten = JSON.parse(localStorage.getItem('fit-transfer-v2'));
+  check('rewritten at version 3', rewritten.schemaVersion, 3);
+  check('old keys gone', ['read', 'kk', 'fit', 'opt', 'bikes', 'cal', 'conv'].filter(k => k in rewritten), []);
+  check('frame ids preserved', rewritten.frames.map(f => f.id), ['b1_abcd', 'b2_efgh']);
+  check('reference still linked', rewritten.references[0].frameId, 'b1_abcd');
+
+  // A crank length that is not one of the dropdown's options must survive rather than be
+  // silently dropped — the old build had it as a free-text field.
+  localStorage.setItem('fit-transfer-v2', JSON.stringify({ ...OLD_SAVE, fit: { ...OLD_SAVE.fit, crank: 168 } }));
+  const odd = document.createElement('iframe');
+  odd.src = '../index.html';
+  document.body.append(odd);
+  for (let i = 0; i < 60; i++) {
+    await sleep(50);
+    if (odd.contentDocument?.querySelector('#frame-list')?.children.length) break;
+  }
+  const oddCrank = odd.contentDocument.querySelector('[data-fit-bike="crankLength"]');
+  check('an off-list crank length is kept', oddCrank.value, '168');
+  check('and is labelled as coming from the save',
+        [...oddCrank.options].some(o => o.value === '168' && /as saved/.test(o.textContent)), true);
+  odd.remove();
+
+  // A version 1 save flips the mast angle convention.
+  localStorage.setItem('fit-transfer-v2', JSON.stringify({ ...OLD_SAVE, conv: undefined,
+    kk: { saddle: { ...OLD_SAVE.kk.saddle, aAngle: 108.5 }, bar: OLD_SAVE.kk.bar } }));
+  const { adoptState, state } = await import('../js/state.js');
+  adoptState(JSON.parse(localStorage.getItem('fit-transfer-v2')));
+  check('v1 mast angle flipped to tube-angle convention', state.carriages.saddle.mastAngle, 71.5);
+} catch (error) {
+  log.push('THREW ' + (error && error.stack ? error.stack : error));
+}
+
+const failures = log.filter(l => l.startsWith('FAIL') || l.startsWith('THREW')).length;
+document.querySelector('#results').textContent = `${failures} failures\n` + log.join('\n');
+</script>
+</body></html>

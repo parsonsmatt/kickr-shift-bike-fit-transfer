@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fit Transfer — tests</title>
+<style>
+body{background:#E4E3DE;color:#15181C;font-family:system-ui,-apple-system,sans-serif;
+  font-size:14px;margin:0;padding:24px;line-height:1.45}
+.wrap{max-width:900px;margin:0 auto}
+h1{font-size:20px;margin:0 0 4px}
+.sub{color:#5A5F66;font-size:12.5px;margin-bottom:20px}
+#total{font-size:15px;font-weight:600;padding:10px 14px;border-radius:3px;margin-bottom:16px;
+  border-left:3px solid #8C8880;background:#F3F2EF}
+#total.pass{border-left-color:#2C6B4E;background:#edf5f0}
+#total.fail{border-left-color:#B0431D;background:#fff3ec}
+.suite{background:#F3F2EF;border:1px solid #C6C3BB;border-radius:3px;margin-bottom:12px}
+.suite h2{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#5A5F66;
+  margin:0;padding:10px 14px;border-bottom:1px solid #C6C3BB;display:flex;
+  justify-content:space-between;align-items:center;gap:10px}
+.tally{font-family:ui-monospace,Menlo,monospace;font-size:12px;letter-spacing:0;text-transform:none}
+.tally.pass{color:#2C6B4E}
+.tally.fail{color:#B0431D}
+pre{margin:0;padding:12px 14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:11.5px;line-height:1.5;white-space:pre-wrap;max-height:340px;overflow:auto}
+pre .bad{color:#B0431D;font-weight:600}
+/* Rendered but offscreen, NOT display:none — an element inside a non-rendered frame
+   cannot take focus, and two suites check that the caret survives a redraw. */
+iframe{position:fixed;left:-10000px;top:0;width:1200px;height:900px;border:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Fit Transfer tests</h1>
+  <div class="sub">Suites run one at a time — two of them own <code>localStorage</code>, so
+    running them together would let one clobber the other.</div>
+  <div id="total">running…</div>
+  <div id="suites"></div>
+</div>
+
+<script type="module">
+const SUITES = [
+  { file: 'model.html', title: 'Model — geometry, solver, calibration maths' },
+  { file: 'interaction.html', title: 'Interaction — the real UI, driven' },
+  { file: 'migration.html', title: 'Migration — loading a pre-refactor save' },
+];
+
+const TIMEOUT_MS = 30000;
+const POLL_MS = 100;
+// A suite publishes its results synchronously, which can be before its app's debounced
+// save has landed. Tearing the frame down and pausing keeps that write from escaping into
+// the next suite's localStorage.
+const SETTLE_MS = 500;
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/** Load one suite offscreen, wait for its results, then tear it down. */
+async function run(suite) {
+  const frame = document.createElement('iframe');
+  frame.src = suite.file;
+  document.body.append(frame);
+
+  const deadline = Date.now() + TIMEOUT_MS;
+  let output = 'FAIL suite timed out after ' + TIMEOUT_MS / 1000 + 's';
+
+  while (Date.now() < deadline) {
+    await sleep(POLL_MS);
+    let text;
+    try {
+      text = frame.contentDocument?.querySelector('#results')?.textContent;
+    } catch {
+      continue; // still navigating
+    }
+    if (text && text !== 'running') {
+      output = text;
+      break;
+    }
+  }
+
+  // Removing the frame discards its timers, so no stray save fires later.
+  frame.remove();
+  await sleep(SETTLE_MS);
+  return output;
+}
+
+const total = document.querySelector('#total');
+const host = document.querySelector('#suites');
+let grandPassed = 0;
+let grandFailed = 0;
+
+for (const suite of SUITES) {
+  const panel = document.createElement('div');
+  panel.className = 'suite';
+  panel.innerHTML = `<h2>${suite.title}<span class="tally">running…</span></h2><pre></pre>`;
+  host.append(panel);
+
+  const output = await run(suite);
+  const lines = output.split('\n');
+  const passed = lines.filter(line => line.startsWith('ok')).length;
+  const failed = lines.filter(line => line.startsWith('FAIL') || line.startsWith('THREW')).length;
+  grandPassed += passed;
+  grandFailed += failed;
+
+  const tally = panel.querySelector('.tally');
+  tally.textContent = failed ? `${failed} failed, ${passed} passed` : `${passed} passed`;
+  tally.className = 'tally ' + (failed ? 'fail' : 'pass');
+
+  // Highlight failures; keep everything else as plain text.
+  panel.querySelector('pre').append(...lines.flatMap(line => {
+    const isBad = line.startsWith('FAIL') || line.startsWith('THREW');
+    const node = isBad ? Object.assign(document.createElement('span'), { className: 'bad', textContent: line })
+                       : document.createTextNode(line);
+    return [node, document.createTextNode('\n')];
+  }));
+
+  total.textContent = `${grandPassed} passed, ${grandFailed} failed`;
+}
+
+total.textContent = grandFailed
+  ? `${grandFailed} failed, ${grandPassed} passed`
+  : `All ${grandPassed} checks passed across ${SUITES.length} suites`;
+total.className = grandFailed ? 'fail' : 'pass';
+</script>
+</body>
+</html>

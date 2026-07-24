@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>model tests</title></head>
+<body>
+<pre id="results">running</pre>
+<script type="module">
+// Numerical tests for the maths, with no DOM involved: frame geometry, the stem solver,
+// and the calibration estimator. These check invariants and round trips rather than
+// hard-coded outputs, so they stay meaningful if a constant changes.
+import { state, adoptState, defaultState } from '../js/state.js';
+import { createFrame, barClampPosition, railClampPosition, steererUp, asBuiltPositions } from '../js/model/frame.js';
+import { carriagePosition, carriageReadings, targetPositions, standoverOffsetFor, standoverTravelFor } from '../js/model/fit-bike.js';
+import { trainerSetups } from '../js/model/reverse.js';
+import { standoverOffset, STANDOVER_POSITIONS } from '../js/model/standover.js';
+import { stemSolutions, bestStemSolution, saddleSetup, targetBarClamp, targetRailClamp, fitSpacerHeight } from '../js/model/solver.js';
+import { fitCarriage, residuals, worstResidual, solveConstants, referenceObservations } from '../js/model/calibration.js';
+
+const log = [];
+let failures = 0;
+function check(label, condition) {
+  const ok = condition === true;
+  if (!ok) failures++;
+  log.push(`${ok ? 'ok  ' : 'FAIL'} ${label}`);
+}
+function near(label, got, want, tolerance = 1e-6) {
+  const ok = Math.abs(got - want) < tolerance;
+  if (!ok) failures++;
+  log.push(`${ok ? 'ok  ' : 'FAIL'} ${label}${ok ? '' : `  got=${got} want=${want}`}`);
+}
+const note = (label, value) => log.push(`--   ${label} = ${JSON.stringify(value)}`);
+
+/** Fresh state, with the two carriages and readings under the test's control. */
+function reset() {
+  adoptState(defaultState());
+  state.readings = { standover: 'A', saddleHeight: 0, saddleForeAft: 0, barHeight: 0, barReach: 0 };
+}
+/** Put a carriage's zero exactly on `point`, so zero readings target that point. */
+function aimCarriageAt(name, point) {
+  state.carriages[name] = { zeroX: point[0], zeroY: point[1], mastAngle: 90,
+    mastMmPerUnit: 10, slideTilt: 0, slideMmPerUnit: 10 };
+}
+
+try {
+
+/* ================ 1. standover is a vector, not a lift ================ */
+log.push('== standover');
+reset();
+near('position A does not move anything', standoverOffsetFor('A')[0], 0);
+near('A travel is zero', standoverTravelFor('A'), 0);
+near('D travels 3 letters worth', standoverTravelFor('D'), 60);
+near('H travels 7 letters worth', standoverTravelFor('H'), 140);
+
+// 20mm per letter along an axis 4 degrees back from vertical.
+const perLetter = standoverOffsetFor('B');
+near('one letter rises 19.95mm', perLetter[1], 20 * Math.cos(4 * Math.PI / 180), 1e-9);
+near('one letter goes 1.40mm back', perLetter[0], -20 * Math.sin(4 * Math.PI / 180), 1e-9);
+const toH = standoverOffsetFor('H');
+near('A to H rises 139.7mm', toH[1], 139.66, 0.01);
+near('A to H goes 9.8mm back', -toH[0], 9.77, 0.01);
+check('the rearward part exceeds the match tolerance at H', -toH[0] > state.options.toleranceMm);
+
+// The offset must move BOTH carriages, and move them equally.
+state.readings.standover = 'H';
+const atH = targetPositions();
+state.readings.standover = 'A';
+const atA = targetPositions();
+near('saddle moved back with the rise', atH.saddle[0] - atA.saddle[0], toH[0], 1e-9);
+near('bar moved back with the rise', atH.bar[0] - atA.bar[0], toH[0], 1e-9);
+near('saddle rose with the rise', atH.saddle[1] - atA.saddle[1], toH[1], 1e-9);
+near('bar rose with the rise', atH.bar[1] - atA.bar[1], toH[1], 1e-9);
+
+// A vertical axis is the degenerate case, and must be exactly vertical.
+near('a 0 degree lean has no rearward part', standoverOffset('H', 20, 0)[0], 0, 1e-12);
+near('a 0 degree lean rises the full travel', standoverOffset('H', 20, 0)[1], 140, 1e-12);
+
+/* ================ 2. the stem solver hits a reachable target exactly ================ */
+log.push('== stem solver');
+reset();
+const frame = createFrame('Round Trip', '56');
+Object.assign(frame, { stack: 570, reach: 385, headTubeAngle: 72.5, seatTubeAngle: 73.5,
+  headsetStack: 15, stemClampHeight: 40, spacersAvailable: 40 });
+
+// Build a target that a catalogue stem can reach exactly: 100mm, -6 deg, 25mm of spacers
+// (25 is a whole number of 2.5mm spacers).
+const buildable = barClampPosition(frame, 25, 100, -6);
+aimCarriageAt('bar', buildable);
+
+const best = bestStemSolution(frame);
+near('recovers the stem length', best.stemLength, 100);
+near('recovers the stem angle', best.stemAngle, -6);
+near('recovers the spacer stack', best.spacerHeight, 25, 1e-9);
+near('lands on the target', best.missMm, 0, 1e-9);
+check('and is marked reachable', best.reachable === true);
+check('with no warnings', best.warnings.length === 0);
+
+// Every solution's dx/dy must agree with its own miss distance.
+const allAgree = stemSolutions(frame).every(s =>
+  Math.abs(Math.hypot(s.dx, s.dy) - s.missMm) < 1e-9);
+check('miss distance always equals hypot(dx, dy)', allAgree);
+
+// Ranking: reachable first, then by miss.
+const ranked = stemSolutions(frame);
+const firstUnreachable = ranked.findIndex(s => !s.reachable);
+check('reachable solutions all sort ahead of unreachable ones',
+  firstUnreachable === -1 || ranked.slice(firstUnreachable).every(s => !s.reachable));
+check('reachable solutions are ordered by miss',
+  ranked.filter(s => s.reachable).every((s, i, arr) => i === 0 || arr[i - 1].missMm <= s.missMm + 1e-12));
+
+// Spacers are quantised, never negative, and a too-tall front end is flagged.
+reset();
+aimCarriageAt('bar', barClampPosition(frame, 0, 100, -6));
+const wantsNegative = fitSpacerHeight(frame, 100, -17, [buildable[0], buildable[1] - 200]);
+check('a target below the stem needs negative spacers', wantsNegative.exactSpacerHeight < -0.5);
+near('but the spacer stack is clamped at zero', Math.min(0, wantsNegative.spacerHeight), 0);
+const quantised = stemSolutions(frame).every(s =>
+  Math.abs(s.spacerHeight / state.options.spacerStep - Math.round(s.spacerHeight / state.options.spacerStep)) < 1e-9);
+check('every spacer stack is a whole number of spacers', quantised);
+
+// Spacers move the bar up the steerer, so more spacers must mean a higher bar.
+const low = barClampPosition(frame, 10, 100, -6);
+const high = barClampPosition(frame, 30, 100, -6);
+check('more spacers raises the bar', high[1] > low[1]);
+check('and brings it back, along the steerer', high[0] < low[0]);
+near('the bar moves exactly along the steerer axis',
+  (high[0] - low[0]) / (high[1] - low[1]), steererUp(frame.headTubeAngle)[0] / steererUp(frame.headTubeAngle)[1], 1e-9);
+
+/* ================ 3. saddle round trip ================ */
+log.push('== saddle');
+reset();
+const SADDLE_HEIGHT = 700;
+state.fitBike.railsBelowSaddleTop = 50;
+frame.crankLength = state.fitBike.crankLength; // no crank compensation for this check
+const clamp = railClampPosition({ seatTubeAngle: frame.seatTubeAngle, saddleHeight: SADDLE_HEIGHT,
+  seatpostSetback: 0, railOffset: 0, railsBelowSaddleTop: state.fitBike.railsBelowSaddleTop });
+aimCarriageAt('saddle', clamp);
+frame.seatpostSetback = 0;
+
+const saddle = saddleSetup(frame);
+near('reports back the saddle height it was built from', saddle.heightAlongSeatAxis, SADDLE_HEIGHT, 1e-9);
+near('a clamp on the seat axis needs no setback', saddle.clampBehindAxis, 0, 1e-9);
+near('and no rail offset', saddle.railOffset, 0, 1e-9);
+check('so the saddle is reachable', saddle.railOffsetReachable === true);
+
+// The same position on a steeper seat angle reads as a different saddle height.
+const steeper = { ...frame, seatTubeAngle: 76 };
+check('a steeper seat angle changes the reported height',
+  Math.abs(saddleSetup(steeper).heightAlongSeatAxis - SADDLE_HEIGHT) > 1);
+note('same position, 73.5 vs 76 deg seat angle',
+  [saddle.heightAlongSeatAxis.toFixed(1), saddleSetup(steeper).heightAlongSeatAxis.toFixed(1)]);
+
+// A seatpost with setback absorbs the rail offset one-for-one.
+const withPost = { ...frame, seatpostSetback: 15 };
+near('post setback comes straight off the rail offset',
+  saddleSetup(withPost).railOffset, saddle.railOffset - 15, 1e-9);
+// Rail travel is a limit, not a suggestion.
+check('an impossible rail offset is flagged',
+  saddleSetup({ ...frame, seatpostSetback: -80, railTravel: 25 }).railOffsetReachable === false);
+
+/* ================ 4. crank and bar-reach compensation ================ */
+log.push('== compensation');
+reset();
+aimCarriageAt('saddle', [-150, 620]);
+aimCarriageAt('bar', [380, 600]);
+state.fitBike.crankLength = 170;
+
+near('a longer crank lowers the saddle by the difference',
+  targetRailClamp({ ...frame, crankLength: 175 })[1], targetRailClamp({ ...frame, crankLength: 170 })[1] - 5, 1e-9);
+near('a shorter crank raises it',
+  targetRailClamp({ ...frame, crankLength: 165 })[1], targetRailClamp({ ...frame, crankLength: 170 })[1] + 5, 1e-9);
+
+state.fitBike.matchMode = 'clamp';
+const clampModeTarget = targetBarClamp({ ...frame, barReach: 95 });
+state.fitBike.matchMode = 'hoods';
+state.fitBike.barReach = 75;
+near('clamp mode ignores the bar reach', clampModeTarget[0], targetBarClamp({ ...frame, barReach: 75 })[0], 1e-9);
+near('hood mode pulls a longer-reach bar back by the difference',
+  targetBarClamp({ ...frame, barReach: 95 })[0], clampModeTarget[0] - 20, 1e-9);
+
+/* ================ 5. the calibration estimator ================ */
+log.push('== calibration estimator');
+reset();
+
+// Known-truth constants, deliberately unlike the defaults.
+const TRUTH = { zeroX: -143.7, zeroY: 468.2, mastAngle: 86, mastMmPerUnit: 10,
+                slideTilt: 4, slideMmPerUnit: -10 };
+// Observations at DIFFERENT standover letters, so the rearward part of the rise cannot be
+// quietly absorbed into the zero point.
+const SAMPLES = [{ letter: 'A', mast: 15.2, slide: 7.0 },
+                 { letter: 'D', mast: 17.8, slide: 4.5 },
+                 { letter: 'H', mast: 13.1, slide: 9.2 }];
+const observations = SAMPLES.map(sample => {
+  const offset = standoverOffsetFor(sample.letter);
+  return { mastReading: sample.mast, slideReading: sample.slide, standoverOffset: offset,
+           position: carriagePosition(TRUTH, sample.mast, sample.slide, offset) };
+});
+// The solver starts from constants that are wrong on every count except the fixed angles.
+const wrongStart = { ...TRUTH, zeroX: 0, zeroY: 0, mastMmPerUnit: 1, slideMmPerUnit: 1 };
+
+const fromTwo = fitCarriage(observations.slice(0, 2), wrongStart, { fitTravel: true });
+for (const field of ['zeroX', 'zeroY', 'mastMmPerUnit', 'slideMmPerUnit']) {
+  near(`two references recover ${field}`, fromTwo[field], TRUTH[field], 1e-6);
+}
+const fromThree = fitCarriage(observations, wrongStart, { fitTravel: true });
+for (const field of ['zeroX', 'zeroY', 'mastMmPerUnit', 'slideMmPerUnit']) {
+  near(`three references recover ${field}`, fromThree[field], TRUTH[field], 1e-6);
+}
+
+const zeroOnly = fitCarriage(observations, TRUTH, { fitTravel: false });
+near('holding the travel still recovers zeroX', zeroOnly.zeroX, TRUTH.zeroX, 1e-6);
+near('holding the travel still recovers zeroY', zeroOnly.zeroY, TRUTH.zeroY, 1e-6);
+near('and leaves the travel exactly as entered', zeroOnly.mastMmPerUnit, TRUTH.mastMmPerUnit);
+
+// Residual of the recovered constants against the observations must be ~0 ...
+state.carriages.saddle = { ...TRUTH };
+state.carriages.bar = { ...TRUTH };
+const asPairs = observations.map(o => ({ name: 'sample', saddle: o, bar: o }));
+near('recovered constants reproduce every observation', worstResidual(residuals(asPairs)), 0, 1e-9);
+
+// ... and a wrong lean angle must SHOW UP as a residual rather than be absorbed.
+state.fitBike.standoverRiseBackDegrees = 0;
+const reoffset = asPairs.map((pair, i) => {
+  const offset = standoverOffsetFor(SAMPLES[i].letter);
+  return { ...pair, saddle: { ...pair.saddle, standoverOffset: offset },
+                    bar: { ...pair.bar, standoverOffset: offset } };
+});
+const leanResidual = worstResidual(residuals(reoffset));
+check('pretending the axis is vertical produces a visible residual', leanResidual > 5);
+near('and that residual is the A-to-H setback', leanResidual, 9.77, 0.01);
+note('worst residual with the lean wrongly set to 0', leanResidual.toFixed(2) + 'mm');
+state.fitBike.standoverRiseBackDegrees = 4;
+
+// Degenerate input: two references in the same place cannot separate the two slides.
+const identical = [observations[0], { ...observations[0] }];
+check('identical references are reported as singular, not fitted',
+  fitCarriage(identical, wrongStart, { fitTravel: true }) === null);
+
+// And that surfaces as a readable failure through solveConstants().
+reset();
+const twinA = createFrame('Twin A');
+const twinB = createFrame('Twin B');
+state.frames = [twinA, twinB];
+state.references = [
+  { frameId: twinA.id, standover: 'A', saddleHeight: 15, saddleForeAft: 7, barHeight: 9, barReach: 4 },
+  { frameId: twinB.id, standover: 'A', saddleHeight: 15, saddleForeAft: 7, barHeight: 9, barReach: 4 },
+];
+const singular = solveConstants();
+check('solveConstants refuses rather than returning nonsense', singular.ok === false);
+check('and says which carriage and why', /too alike to/.test(singular.message));
+note('message', singular.message.slice(0, 80));
+
+// A reference pointing at a deleted frame is dropped, not crashed on.
+state.references.push({ frameId: 'does-not-exist', standover: 'A', saddleHeight: 1, saddleForeAft: 1, barHeight: 1, barReach: 1 });
+near('observations skip references with no frame', referenceObservations().length, 2);
+
+/* ---------- 7. reverse: a real bike back to fit bike readings ---------- */
+// The strong claim: type the readings this produces into section 1 and the target lands
+// back on the as-built position. Checked against the machine's measured constants, not a
+// contrived pair, so a sign error in either direction shows up.
+reset();
+const ridden = createFrame('Ridden', '56');
+Object.assign(ridden, {
+  stack: 570, reach: 385, headTubeAngle: 72.5, seatTubeAngle: 73.5,
+  headsetStack: 15, stemClampHeight: 40, seatpostSetback: 20,
+  builtStemLength: 100, builtStemAngle: -6, builtSpacerHeight: 25,
+  builtSaddleHeight: 720, builtRailOffset: 5,
+});
+state.frames = [ridden];
+
+const built = asBuiltPositions(ridden, state.fitBike.railsBelowSaddleTop);
+const setups = trainerSetups(ridden);
+check('one row per standover position', setups.length === STANDOVER_POSITIONS.length);
+
+for (const setup of setups) {
+  state.readings = { ...setup };
+  const back = targetPositions();
+  near(`standover ${setup.standover} reproduces the saddle clamp`,
+       Math.hypot(back.saddle[0] - built.saddle[0], back.saddle[1] - built.saddle[1]), 0);
+  near(`standover ${setup.standover} reproduces the bar clamp`,
+       Math.hypot(back.bar[0] - built.bar[0], back.bar[1] - built.bar[1]), 0);
+}
+
+// Every position is an exact answer, so they must differ — otherwise the standover offset
+// is not reaching the inverse at all.
+check('the readings differ between standover positions',
+      Math.abs(setups[0].saddleHeight - setups[7].saddleHeight) > 1);
+// Higher standover raises both carriages, so less mast reading is needed to reach the
+// same point.
+check('a higher standover position needs a smaller height reading',
+      setups[7].saddleHeight < setups[0].saddleHeight && setups[7].barHeight < setups[0].barHeight);
+note('A readings', ['saddleHeight', 'saddleForeAft', 'barHeight', 'barReach'].map(k => Number(setups[0][k].toFixed(2))));
+note('on scale', setups.filter(s => s.onScale).map(s => s.standover));
+
+// A negative reading is off the bottom of the scale, and that is the only thing onScale claims.
+check('onScale is exactly "no reading below zero"',
+      setups.every(s => s.onScale === ['saddleHeight', 'saddleForeAft', 'barHeight', 'barReach'].every(k => s[k] >= 0)));
+
+// The inverse of a carriage is the inverse of the forward model for arbitrary points too.
+reset();
+const spot = [123, 456];
+const roundTripped = carriageReadings(state.carriages.bar, spot, [7, 11]);
+const backToSpot = carriagePosition(state.carriages.bar, roundTripped.mastReading, roundTripped.slideReading, [7, 11]);
+near('carriageReadings inverts carriagePosition in x', backToSpot[0], spot[0]);
+near('carriageReadings inverts carriagePosition in y', backToSpot[1], spot[1]);
+check('a carriage with a dead slide cannot be inverted',
+      carriageReadings({ ...state.carriages.bar, slideMmPerUnit: 0 }, spot) === null);
+
+} catch (error) {
+  failures++;
+  log.push('THREW ' + (error && error.stack ? error.stack : error));
+}
+
+document.querySelector('#results').textContent =
+  `${failures} failures\n` + log.join('\n');
+</script>
+</body></html>

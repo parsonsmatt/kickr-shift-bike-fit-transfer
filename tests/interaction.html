@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>smoke</title></head>
+<body>
+<pre id="results">running</pre>
+<script type="module">
+const log = [];
+const check = (label, got, want) => {
+  const ok = JSON.stringify(got) === JSON.stringify(want);
+  log.push(`${ok ? 'ok  ' : 'FAIL'} ${label}${ok ? '' : `  got=${JSON.stringify(got)} want=${JSON.stringify(want)}`}`);
+};
+const note = (label, value) => log.push(`--   ${label} = ${JSON.stringify(value)}`);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+function type(input, value) {
+  input.value = value;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function pick(select, value) {
+  select.value = value;
+  select.dispatchEvent(new Event('input', { bubbles: true }));
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+}
+const buttonByText = text => $$('button').find(b => b.textContent.trim() === text);
+
+try {
+  localStorage.clear();
+
+  // Load the real page markup, minus its module tag, then boot the app against it.
+  const html = await fetch('../index.html').then(r => r.text());
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  const results = $('#results');
+  document.body.innerHTML = parsed.body.innerHTML;
+  document.body.append(results);
+  await import('../js/main.js');
+
+  for (let i = 0; i < 60 && !$('#frame-list').children.length; i++) await sleep(50);
+  check('booted with one frame card', $('#frame-list').children.length, 1);
+  check('status mentions this browser', /saves to this browser/.test($('#save-status').textContent), true);
+
+  /* ---- 1. typing a reading moves the target readout ---- */
+  const readoutValues = () => $$('#target-readout .v').map(n => n.textContent);
+  const before = readoutValues();
+  type($('[data-reading="saddleHeight"]'), '18.5');
+  const after = readoutValues();
+  check('saddle clamp Y changed', before[2] !== after[2], true);
+  note('saddle clamp Y', [before[2], after[2]]);
+
+  /* ---- 2. standover select lifts both carriages ---- */
+  const barTargetBeforeRise = $$('#target-readout .v')[3].textContent;
+  pick($('[data-reading="standover"]'), 'D');
+  // Three letters at 20mm along an axis leaning 4 degrees back: 59.9 up, 4.2 back.
+  check('standover rise is 60mm up', $$('#target-readout .v')[0].textContent, '60');
+  check('standover rise reports its setback', /4\.2 back \| position D/.test($$('#target-readout div')[0].textContent), true);
+  check('standover hint spells out up and back', /D moves both reach\/setback masts 60\.0mm along the rise axis: 59\.9mm up, 4\.2mm back/.test($('[data-hint-for="standover"]').textContent), true);
+  check('rise moved the bar target back too',
+        Math.abs(Number(barTargetBeforeRise) - Number($$('#target-readout .v')[3].textContent) - 4.2) < 0.05, true);
+  pick($('[data-reading="standover"]'), 'A');
+  check('back at A the rise is zero', $$('#target-readout .v')[0].textContent, '0');
+  check('A described as the reference', /A is the reference position/.test($('[data-hint-for="standover"]').textContent), true);
+
+  /* ---- 2b. the standover axis is editable, and 0 makes it purely vertical ---- */
+  type($('[data-fit-bike="standoverRiseBackDegrees"]'), '0');
+  pick($('[data-reading="standover"]'), 'H');
+  check('vertical axis gives no setback', $$('#target-readout div')[0].textContent.includes('0 back'), true);
+  check('vertical axis gives the full 140mm', $$('#target-readout .v')[0].textContent, '140');
+  type($('[data-fit-bike="standoverRiseBackDegrees"]'), '4');
+  check('4 degrees back at H', $$('#target-readout .v')[0].textContent, '140');
+  check('H setback is ~9.8mm', /9\.8 back/.test($$('#target-readout div')[0].textContent), true);
+  check('per-letter hint shown on the constant', $('[data-hint-for="standoverRise"]').textContent,
+        '0 is straight up. Each letter then moves 20.0mm up and 1.4mm back.');
+  pick($('[data-reading="standover"]'), 'A');
+
+  /* ---- 2c. crank length is a dropdown of the bike's actual increments ---- */
+  const crank = $('[data-fit-bike="crankLength"]');
+  check('crank is a dropdown', crank.tagName, 'SELECT');
+  check('crank offers 165-175 in 2.5mm steps',
+        [...crank.options].map(o => o.value), ['165', '167.5', '170', '172.5', '175']);
+  check('crank defaults to 170', crank.value, '170');
+  // Crank compensation is per candidate frame, not part of the fit bike's own readout, so
+  // it shows up in the frame's reported saddle height. Longer cranks on the fit bike mean a
+  // lower measured saddle there, so the target bike's saddle goes UP by the difference —
+  // measured along that frame's seat axis, hence 5 / sin(73.5 deg).
+  const frameSaddleHeight = () => Number($('#compare-table tbody tr').children[10].textContent);
+  const fitBikeReadoutY = () => $$('#target-readout .v')[2].textContent;
+  const readoutAt170 = fitBikeReadoutY();
+  const heightAt170 = frameSaddleHeight();
+  pick(crank, '175');
+  check('the fit bike readout is crank-independent', fitBikeReadoutY(), readoutAt170);
+  check('a longer fit-bike crank raises the frame saddle height along its seat axis',
+        Math.abs(frameSaddleHeight() - heightAt170 - 5 / Math.sin(73.5 * Math.PI / 180)) < 0.05, true);
+  pick(crank, '165');
+  check('a shorter one lowers it',
+        Math.abs(frameSaddleHeight() - heightAt170 + 5 / Math.sin(73.5 * Math.PI / 180)) < 0.05, true);
+  pick(crank, '170');
+  check('and back again', frameSaddleHeight(), heightAt170);
+
+  /* ---- 2d. the promoted setup fields are on the form, outside the constants panel ---- */
+  check('constants panel starts closed', $('#constants-details').open, false);
+  for (const field of ['crankLength', 'railsBelowSaddleTop', 'noseToRailCentre', 'barReach', 'matchMode']) {
+    const node = $(`[data-fit-bike="${field}"]`);
+    check(`${field} is visible without opening the constants panel`,
+          !!node && !node.closest('details'), true);
+  }
+  for (const field of ['standoverStepMm', 'standoverRiseBackDegrees']) {
+    check(`${field} stays in the constants panel`,
+          $(`[data-fit-bike="${field}"]`).closest('details') === $('#constants-details'), true);
+  }
+  check('bar reach defaults to the stock 100mm', $('[data-fit-bike="barReach"]').value, '100');
+  check('each setup field appears exactly once',
+        $$('[data-fit-bike="crankLength"]').length + $$('[data-fit-bike="barReach"]').length, 2);
+
+  /* ---- 3. state is persisted, in the new schema ---- */
+  await sleep(400);
+  const saved = JSON.parse(localStorage.getItem('fit-transfer-v2'));
+  check('saved schemaVersion', saved.schemaVersion, 3);
+  check('saved reading', saved.readings.saddleHeight, 18.5);
+  check('saved uses new frame field names', 'headTubeAngle' in saved.frames[0], true);
+  check('save status says saved', /^saved \|/.test($('#save-status').textContent), true);
+
+  /* ---- 4. caret survives a re-render mid-number ---- */
+  const reachInput = $('[data-path$=".reach"]');
+  reachInput.focus();
+  type(reachInput, '22.');
+  const live = $('[data-path$=".reach"]');
+  check('half-typed text kept', live.value, '22.');
+  check('focus kept', document.activeElement === live, true);
+
+  /* ---- 5. editing a per-frame number changes its answer ---- */
+  const verdict = () => $('#frame-list .verdict').textContent;
+  const verdictBefore = verdict();
+  type($('[data-path$=".reach"]'), '381');
+  type($('[data-path$=".stack"]'), '640');
+  check('verdict changed after stack edit', verdict() !== verdictBefore, true);
+  note('verdict', [verdictBefore.trim(), verdict().trim()]);
+  check('compare table follows', $('#compare-table tbody tr td:nth-child(3)').textContent, '640');
+
+  /* ---- 6. renaming a frame updates the compare table without losing the caret ---- */
+  const nameInput = $('[data-path$=".name"]');
+  nameInput.focus();
+  type(nameInput, 'Rename Test');
+  check('compare table shows new name', $('#compare-table tbody tr td').textContent, 'Rename Test');
+  check('name field still focused', document.activeElement.getAttribute('data-path'), nameInput.getAttribute('data-path'));
+
+  /* ---- 7. add and remove frames ---- */
+  // The fit bike's cranks are meant to be set to whatever the target bike will run, so a
+  // frame added afterwards should start out matching rather than at a hard-coded 170.
+  pick(crank, '172.5');
+  $('#add-frame').click();
+  check('two frames', $('#frame-list').children.length, 2);
+  check('two compare rows', $('#compare-table tbody').children.length, 2);
+  const crankFields = $$('[data-path$=".crankLength"]');
+  const crankHintOf = field => field.parentElement.querySelector('.hint').textContent;
+  check('a new frame inherits the fit bike crank', crankFields[1].value, '172.5');
+  check('a matching frame reports no correction',
+        /no saddle correction/.test(crankHintOf(crankFields[1])), true);
+  check('a frame on different cranks says which way the saddle moves',
+        /raised 2\.5mm/.test(crankHintOf(crankFields[0])), true);
+  type(crankFields[1], '170');
+  pick(crank, '170');
+  buttonByText('Remove').click();
+  check('back to one frame', $('#frame-list').children.length, 1);
+
+  /* ---- 8. paste a geometry table and import a size column ---- */
+  $('#toggle-paste').click();
+  check('paste panel open', $('#paste-panel').style.display, 'block');
+  type($('#paste-input'), 'Size\t48\t52\t56\nStack\t520\t550\t575\nReach\t370\t378\t384\nHead tube angle\t71\t72\t73\nSeat tube angle\t75\t74\t73');
+  $('#parse-paste').click();
+  check('parse preview rows', $('#parse-output tbody').children.length, 4);
+  check('size names line up with data columns', $$('#parse-output thead th').map(t => t.textContent), ['Field', '48', '52', '56']);
+  $('#parse-output select').value = '2';
+  type($('#parse-output input[placeholder="Frame name"]'), 'Pasted Frame');
+  buttonByText('Add this frame').click();
+  check('frame imported', $('#frame-list').children.length, 2);
+  const pastedRow = $$('#compare-table tbody tr').find(r => r.children[0].textContent === 'Pasted Frame');
+  check('imported stack/reach/hta/sta', pastedRow && [2, 3, 4, 5].map(i => pastedRow.children[i].textContent), ['575', '384', '73.0', '73.0']);
+  check('imported size name', pastedRow && pastedRow.children[1].textContent, '56');
+  check('paste panel closed', $('#paste-panel').style.display, 'none');
+
+  /* ---- 9. calibrate: check, then solve, then undo ---- */
+  const cardButtons = label => $$('#frame-list button').filter(b => b.textContent.trim() === label);
+  cardButtons('Use as calibration reference')[0].click();
+  check('one reference row', $('#reference-table tbody').children.length, 1);
+  check('reference note', /zero points only/.test($('#reference-note').textContent), true);
+
+  const referenceInputs = $$('#reference-table tbody input');
+  check('four reading inputs', referenceInputs.length, 4);
+  type(referenceInputs[0], '15.0');
+  type(referenceInputs[1], '7.0');
+  type($$('#reference-table tbody input')[2], '9.0');
+  type($$('#reference-table tbody input')[3], '4.0');
+
+  $('#check-constants').click();
+  check('check produced a verdict box', !!$('#calibration-result .warnbox, #calibration-result .okbox'), true);
+  note('check says', $('#calibration-result div').textContent.slice(0, 70));
+  check('constants panel opened', $('#constants-details').open, true);
+
+  const zeroXBefore = Number($('[data-path="carriages.saddle.zeroX"]').value);
+  window.confirm = () => true;
+  $('#solve-constants').click();
+  const zeroXAfter = Number($('[data-path="carriages.saddle.zeroX"]').value);
+  check('solve moved the saddle zero point', zeroXBefore !== zeroXAfter, true);
+  note('saddle zeroX', [zeroXBefore, zeroXAfter]);
+  check('change table listed constants', $('#calibration-result table') ? $('#calibration-result tbody').children.length > 0 : false, true);
+
+  buttonByText('Undo solve').click();
+  check('undo restored the zero point', Number($('[data-path="carriages.saddle.zeroX"]').value), zeroXBefore);
+  check('undo message shown', /put back the way you had them/.test($('#calibration-result').textContent), true);
+
+  /* ---- 10. second reference switches to fitting travel too ---- */
+  cardButtons('Use as calibration reference')[1].click();
+  check('two reference rows', $('#reference-table tbody').children.length, 2);
+  check('reference note mentions travel', /travel per unit/.test($('#reference-note').textContent), true);
+  const gainBefore = Number($('[data-path="carriages.bar.mastMmPerUnit"]').value);
+  const refInputs = $$('#reference-table tbody input');
+  type(refInputs[4], '17.5'); type(refInputs[5], '5.5'); type(refInputs[6], '12.0'); type(refInputs[7], '6.0');
+  pick($$('#reference-table tbody select')[1], 'C');
+  $('#solve-constants').click();
+  const gainAfter = Number($('[data-path="carriages.bar.mastMmPerUnit"]').value);
+  check('travel per unit was fitted', gainBefore !== gainAfter, true);
+  note('bar mastMmPerUnit', [gainBefore, gainAfter]);
+
+  /* ---- 11. duplicate, and removing a frame drops its reference ---- */
+  cardButtons('Duplicate as another size')[0].click();
+  check('three frames after duplicate', $('#frame-list').children.length, 3);
+  const referencesBefore = $('#reference-table tbody').children.length;
+  cardButtons('Remove')[0].click();
+  check('reference removed with its frame', $('#reference-table tbody').children.length, referencesBefore - 1);
+
+  /* ---- 12. hood match mode shifts the bar target ---- */
+  const barTargetX = () => $$('#target-readout .v')[3].textContent;
+  const clampModeX = barTargetX();
+  pick($('[data-fit-bike="matchMode"]'), 'hoods');
+  type($('[data-fit-bike="barReach"]'), '95');
+  check('hood mode still reports the same bar clamp target', barTargetX(), clampModeX);
+  note('side view label', $('#side-view-label').textContent);
+  check('side view drew something', $('#side-view').children.length > 20, true);
+
+  /* ---- 13. options feed the solver ---- */
+  type($('[data-option="stemLengths"]'), '100');
+  type($('[data-option="stemAngles"]'), '6');
+  const firstCardRows = () => $$('#frame-list > .bike:first-child table tbody tr').length;
+  check('catalogue of one length x two flips', firstCardRows(), 2);
+  type($('[data-option="solutionsPerFrame"]'), '1');
+  check('solutions shown honours the limit', firstCardRows(), 1);
+
+  /* ---- 14. reset ---- */
+  $('#reset-all').click();
+  check('reset leaves one default frame', $('#frame-list').children.length, 1);
+  check('reset clears references', $('#reference-table tbody').children[0].getAttribute('colspan') !== null || $('#reference-table tbody').textContent.includes('No references yet'), true);
+  check('reset restored default readings', $('[data-reading="saddleHeight"]').value, '15.2');
+
+  /* ---- 15. reverse: readings that set the fit bike up to match a real bike ---- */
+  // Deliberately after the reset, so this runs on the measured constants and Frame A's
+  // untouched "as built" figures. The end-to-end claim: apply the readings this section
+  // produces and the app should solve that same frame straight back to the stem, angle and
+  // spacers it says it is already built with.
+  const reverseRows = () => $$('#reverse-table tbody tr');
+  check('a row per standover position', reverseRows().length, 8);
+  check('reverse table names the highlighted frame', /Frame A/.test($('#reverse-label').textContent), true);
+  note('standover positions on the scales',
+       reverseRows().filter(r => /on scale/.test(r.textContent)).map(r => r.children[0].textContent));
+
+  const onScale = reverseRows().filter(row => /on scale/.test(row.textContent));
+  check('at least one standover position is on the scales', onScale.length > 0, true);
+
+  onScale[0].querySelector('button').click();
+  const compareCells = () => $$('#compare-table tbody tr')[0].children;
+  note('solved back to', [6, 7, 8, 9, 10].map(i => compareCells()[i].textContent));
+  check('applying the readings solves back to the built stem', compareCells()[6].textContent, '100mm');
+  check('and the built stem angle', compareCells()[7].textContent, '-6.0');
+  check('and the built spacer stack', compareCells()[8].textContent, '20.0mm');
+  check('the miss is no worse than the rounding to whole millimetres',
+        Number(compareCells()[9].textContent) < 2.5, true);
+  check('and the built saddle height comes back',
+        Math.abs(Number(compareCells()[10].textContent) - 700) < 1.5, true);
+  check('the four reading inputs were written, not just the state',
+        $('[data-reading="saddleHeight"]').value !== '15.2', true);
+  check('the applied row is marked in use',
+        /in use/.test(reverseRows().find(r => r.classList.contains('best')).textContent), true);
+} catch (error) {
+  log.push('THREW ' + (error && error.stack ? error.stack : error));
+}
+
+const failures = log.filter(l => l.startsWith('FAIL') || l.startsWith('THREW')).length;
+document.querySelector('#results').textContent = `${failures} failures\n` + log.join('\n');
+</script>
+</body></html>

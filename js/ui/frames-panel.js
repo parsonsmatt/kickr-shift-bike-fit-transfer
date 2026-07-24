@@ -1,0 +1,292 @@
+// Section 3: one card per candidate frame — its geometry, the stem options that hit the
+// target, and what the saddle has to do.
+
+import { select, element, clearChildren } from '../lib/dom.js';
+import { oneDecimal, whole, signedOneDecimal } from '../lib/format.js';
+import { state } from '../state.js';
+import { createFrame, newFrameId } from '../model/frame.js';
+import { normaliseStandover } from '../model/standover.js';
+import { stemSolutions, saddleSetup, isMatch } from '../model/solver.js';
+import { numberField, textField, readoutCell, chip, table } from './fields.js';
+
+/** A numeric field on a frame; the field path is scoped by frame id. */
+const frameField = (frame, field, label, hint, onChange) =>
+  numberField({ target: frame, field, path: `${frame.id}.${field}`, label, hint, onChange });
+
+/**
+ * Normally these cranks match the fit bike's, which makes the correction nothing at all.
+ * When they do differ, say so and in which direction, because a silent saddle shift is
+ * indistinguishable from a mis-set constant.
+ */
+function crankHint(frame) {
+  const fitBikeCrank = state.fitBike.crankLength || 0;
+  const lift = fitBikeCrank - (frame.crankLength || 0);
+  if (!lift) return 'Same as the fit bike, so no saddle correction.';
+
+  return (
+    `The fit bike is set to ${oneDecimal(fitBikeCrank)}, so the saddle target is ` +
+    `${lift > 0 ? 'raised' : 'lowered'} ${oneDecimal(Math.abs(lift))}mm to keep the same leg ` +
+    'extension. Setting the fit bike to these cranks removes the correction. Note the bar ' +
+    'target does not move, so the saddle-to-bar drop changes by the same amount.'
+  );
+}
+
+/** "100mm x -6.0 deg | 20.0mm spacers | match 1.2mm" — the one-line answer per frame. */
+function verdictLine(best) {
+  if (!best) return element('div', { class: 'verdict' }, 'no catalogue');
+
+  const status = !best.reachable
+    ? 'not reachable'
+    : isMatch(best)
+      ? `match ${oneDecimal(best.missMm)}mm`
+      : `closest ${oneDecimal(best.missMm)}mm`;
+
+  return element(
+    'div',
+    { class: 'verdict' },
+    element('b', {}, `${whole(best.stemLength)}mm x ${signedOneDecimal(best.stemAngle)} deg`),
+    ` | ${oneDecimal(best.spacerHeight)}mm spacers | `,
+    chip(status, best.reachable && isMatch(best)),
+  );
+}
+
+/** The frame's own numbers, four columns of fields. */
+function geometryFields(frame, onChange, onNameChange) {
+  return element(
+    'div',
+    { class: 'grid cols4', style: 'margin-top:12px' },
+    element(
+      'div',
+      {},
+      textField({ target: frame, field: 'name', path: `${frame.id}.name`, label: 'Name', onChange: onNameChange }),
+      textField({ target: frame, field: 'size', path: `${frame.id}.size`, label: 'Size', onChange: onNameChange }),
+      frameField(frame, 'crankLength', 'Crank length (mm)', crankHint(frame), onChange),
+    ),
+    element(
+      'div',
+      {},
+      frameField(frame, 'stack', 'Frame stack (mm)', null, onChange),
+      frameField(frame, 'reach', 'Frame reach (mm)', null, onChange),
+      frameField(frame, 'headTubeAngle', 'Head tube angle (deg)', null, onChange),
+    ),
+    element(
+      'div',
+      {},
+      frameField(frame, 'headsetStack', 'Headset stack above head tube (mm)', 'Height of the upper cover. Check the manual.', onChange),
+      frameField(frame, 'stemClampHeight', 'Stem clamp height (mm)', 'Half of this sits above the spacers.', onChange),
+      frameField(frame, 'spacersAvailable', 'Spacers available (mm)', null, onChange),
+    ),
+    element(
+      'div',
+      {},
+      frameField(frame, 'barReach', 'Bar reach (mm)', 'Used in hood-match mode.', onChange),
+      frameField(frame, 'seatTubeAngle', 'Seat tube angle (deg)', null, onChange),
+      frameField(frame, 'seatpostSetback', 'Seatpost setback (mm)', null, onChange),
+    ),
+  );
+}
+
+/** The ranked stem table. Unreachable rows show the spacer height they would need. */
+function stemOptionsTable(solutions, best) {
+  const shown = solutions.slice(0, Math.max(1, state.options.solutionsPerFrame));
+
+  const rows = shown.map(solution =>
+    element(
+      'tr',
+      { class: solution === best ? 'best' : '' },
+      element('td', {}, `${whole(solution.stemLength)}mm`),
+      element('td', {}, signedOneDecimal(solution.stemAngle)),
+      element(
+        'td',
+        {},
+        solution.reachable
+          ? `${oneDecimal(solution.spacerHeight)}mm`
+          : `${oneDecimal(solution.exactSpacerHeight)}mm`,
+      ),
+      element('td', {}, signedOneDecimal(solution.dx)),
+      element('td', {}, signedOneDecimal(solution.dy)),
+      element('td', {}, oneDecimal(solution.missMm)),
+      element(
+        'td',
+        {},
+        solution.warnings.length
+          ? solution.warnings.map(warning => chip(warning, false))
+          : chip('ok', true),
+      ),
+    ),
+  );
+
+  const headings = ['Stem', 'Angle', 'Spacers', 'd reach', 'd height', 'Miss', 'Notes'];
+  return element(
+    'div',
+    { style: 'margin-top:14px' },
+    element('h3', {}, 'Stem options'),
+    element('div', { class: 'scroll' }, table(headings, rows)),
+  );
+}
+
+function saddleSection(frame) {
+  const saddle = saddleSetup(frame);
+
+  return element(
+    'div',
+    { style: 'margin-top:14px' },
+    element('h3', {}, 'Saddle'),
+    element(
+      'div',
+      { class: 'readout' },
+      readoutCell(
+        'Height on this frame',
+        oneDecimal(saddle.heightAlongSeatAxis),
+        `mm along its ${oneDecimal(frame.seatTubeAngle)} deg axis`,
+      ),
+      readoutCell('Clamp behind seat axis', oneDecimal(saddle.clampBehindAxis), 'mm'),
+      readoutCell('Post setback fitted', oneDecimal(frame.seatpostSetback), 'mm', { small: true }),
+      readoutCell('Rail offset needed', signedOneDecimal(saddle.railOffset), 'mm back from rail centre'),
+    ),
+    element(
+      'div',
+      { style: 'margin-top:6px' },
+      saddle.railOffsetReachable
+        ? chip('saddle reachable', true)
+        : chip(`rail offset exceeds ${whole(saddle.railTravel)}mm - change seatpost setback`, false),
+    ),
+  );
+}
+
+/** The "as currently built" fields, only needed to use this frame as a reference. */
+function asBuiltSection(frame, onChange) {
+  return element(
+    'details',
+    {},
+    element('summary', {}, 'As currently built - needed only to use this frame as a calibration reference'),
+    element(
+      'div',
+      { class: 'grid cols3' },
+      element(
+        'div',
+        {},
+        frameField(frame, 'builtStemLength', 'Stem length fitted (mm)', null, onChange),
+        frameField(frame, 'builtStemAngle', 'Stem angle fitted (deg)', null, onChange),
+      ),
+      element(
+        'div',
+        {},
+        frameField(frame, 'builtSpacerHeight', 'Spacers below the stem (mm)', null, onChange),
+        frameField(frame, 'builtRailOffset', 'Saddle back from rail centre (mm)', null, onChange),
+      ),
+      element(
+        'div',
+        {},
+        frameField(frame, 'builtSaddleHeight', 'Saddle height as measured (mm)', 'BB to saddle top along this frame’s seat axis.', onChange),
+        frameField(frame, 'railTravel', 'Rail travel each way (mm)', null, onChange),
+      ),
+    ),
+  );
+}
+
+function frameActions(frame, onChange) {
+  const useAsReference = () => {
+    if (state.references.some(reference => reference.frameId === frame.id)) return;
+    state.references.push({
+      frameId: frame.id,
+      standover: normaliseStandover(state.readings.standover),
+      saddleHeight: 0,
+      saddleForeAft: 0,
+      barHeight: 0,
+      barReach: 0,
+    });
+    onChange();
+    select('#reference-table').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const duplicate = () => {
+    const copy = { ...frame, id: newFrameId(), size: (frame.size || '') + ' copy' };
+    state.frames.splice(state.frames.indexOf(frame) + 1, 0, copy);
+    onChange();
+  };
+
+  const remove = () => {
+    state.frames = state.frames.filter(other => other !== frame);
+    state.references = state.references.filter(reference => reference.frameId !== frame.id);
+    onChange();
+  };
+
+  const action = (label, handler) => element('button', { class: 'ghost tiny', onclick: handler }, label);
+
+  return element(
+    'div',
+    { class: 'btnrow', style: 'margin-top:14px' },
+    action('Show in diagram', () => {
+      state.activeFrameId = frame.id;
+      onChange();
+    }),
+    action('Use as calibration reference', useAsReference),
+    action('Duplicate as another size', duplicate),
+    action('Remove', remove),
+  );
+}
+
+export function renderFrames(onChange, onNameChange) {
+  const host = clearChildren(select('#frame-list'));
+
+  if (!state.frames.length) {
+    host.append(
+      element('div', { class: 'panel note' }, 'No frames yet. Add one, or paste a geometry table.'),
+    );
+    return;
+  }
+
+  // The active frame drives the side view; keep it pointing at something real.
+  if (!state.frames.some(frame => frame.id === state.activeFrameId)) {
+    state.activeFrameId = state.frames[0].id;
+  }
+
+  for (const frame of state.frames) {
+    const solutions = stemSolutions(frame);
+    const best = solutions[0];
+    const card = element('div', { class: 'bike' + (frame.id === state.activeFrameId ? ' active' : '') });
+
+    card.append(
+      element(
+        'div',
+        {
+          class: 'head',
+          onclick: event => {
+            if (event.target.tagName === 'BUTTON') return;
+            frame.expanded = !frame.expanded;
+            state.activeFrameId = frame.id;
+            onChange();
+          },
+        },
+        element('div', { class: 'name' }, frame.name, frame.size ? element('small', {}, frame.size) : null),
+        verdictLine(best),
+      ),
+    );
+
+    if (frame.expanded) {
+      card.append(
+        geometryFields(frame, onChange, onNameChange),
+        stemOptionsTable(solutions, best),
+        saddleSection(frame),
+        asBuiltSection(frame, onChange),
+        frameActions(frame, onChange),
+      );
+    }
+
+    host.append(card);
+  }
+}
+
+export function bindFrameButtons(onChange) {
+  select('#add-frame').onclick = () => {
+    const frame = createFrame(
+      'Frame ' + String.fromCharCode(65 + state.frames.length),
+      '',
+      state.fitBike.crankLength,
+    );
+    state.frames.push(frame);
+    state.activeFrameId = frame.id;
+    onChange();
+  };
+}

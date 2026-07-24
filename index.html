@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kickr Shift Fit Transfer — fit bike to frame</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="topbar">
+    <div>
+      <h1>Fit <span>Transfer</span></h1>
+      <div class="sub">Choose the standover position and type in the four numbers off the fit bike's own scales. Get back the stem length, stem angle and spacer stack that put you in the same place on a real frame. Everything runs in the browser; nothing is sent anywhere.</div>
+    </div>
+    <div class="btnrow">
+      <button class="ghost tiny" id="export-json">Export JSON</button>
+      <button class="ghost tiny" id="import-json">Import JSON</button>
+      <button class="ghost tiny" id="reset-all">Reset all</button>
+      <input type="file" id="import-file" accept=".json" style="display:none">
+    </div>
+  </div>
+  <div class="status" id="save-status"></div>
+</header>
+
+<section>
+  <h2>1 &mdash; Fit bike settings</h2>
+  <div class="panel">
+    <div class="grid cols5 big">
+      <div class="field"><label>Standover height</label>
+        <select data-reading="standover">
+          <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
+          <option value="E">E</option><option value="F">F</option><option value="G">G</option><option value="H">H</option>
+        </select>
+        <div class="hint" data-hint-for="standover"></div></div>
+      <div class="field"><label data-label-for="saddleHeight">Saddle height</label>
+        <input type="text" inputmode="decimal" data-reading="saddleHeight">
+        <div class="hint" data-hint-for="saddleHeight"></div></div>
+      <div class="field"><label data-label-for="saddleForeAft">Saddle fore / aft</label>
+        <input type="text" inputmode="decimal" data-reading="saddleForeAft">
+        <div class="hint" data-hint-for="saddleForeAft"></div></div>
+      <div class="field"><label data-label-for="barHeight">Handlebar height</label>
+        <input type="text" inputmode="decimal" data-reading="barHeight">
+        <div class="hint" data-hint-for="barHeight"></div></div>
+      <div class="field"><label data-label-for="barReach">Handlebar reach</label>
+        <input type="text" inputmode="decimal" data-reading="barReach">
+        <div class="hint" data-hint-for="barReach"></div></div>
+    </div>
+
+    <h3 style="margin-top:16px">Current setup</h3>
+    <div class="grid cols5" style="gap:0 12px">
+      <div class="field"><label>Crank length (mm)</label>
+        <select data-fit-bike="crankLength">
+          <option value="165">165</option><option value="167.5">167.5</option>
+          <option value="170">170</option><option value="172.5">172.5</option>
+          <option value="175">175</option>
+        </select>
+        <div class="hint">Set this to the cranks the bike you are aiming for will run, and each
+          frame to match. A frame that differs has its saddle height corrected by the difference.</div></div>
+      <div class="field"><label>Rails below saddle top (mm)</label>
+        <input type="text" inputmode="decimal" data-fit-bike="railsBelowSaddleTop">
+        <div class="hint">Saddle shell stack, for the saddle you are actually riding. Affects the
+          reported saddle height and the drawing, not the seatpost answer.</div></div>
+      <div class="field"><label>Nose to rail centre (mm)</label>
+        <input type="text" inputmode="decimal" data-fit-bike="noseToRailCentre">
+        <div class="hint">Same saddle. Drawing and reach readout only.</div></div>
+      <div class="field"><label>Bar reach (mm)</label>
+        <input type="text" inputmode="decimal" data-fit-bike="barReach">
+        <div class="hint">The stock bar is 100&nbsp;mm. Only used in hood-match mode.</div></div>
+      <div class="field"><label>Match on</label>
+        <select data-fit-bike="matchMode">
+          <option value="clamp">Bar clamp centre</option>
+          <option value="hoods">Hood position</option>
+        </select>
+        <div class="hint">Clamp centre assumes the same bar on both bikes. Hood position corrects
+          for a target bar with a different reach.</div></div>
+    </div>
+
+    <details id="constants-details">
+      <summary>Fit bike constants &mdash; where the scales sit and which way they move</summary>
+      <div class="note" style="margin:4px 0 12px">
+        Each carriage is a zero mark plus two slides. Give where the zero mark sits relative to the
+        bottom bracket with standover at A, then describe each slide. Standover B through H moves
+        both horizontal reach/setback masts 20&nbsp;mm per letter along an axis that leans 4&deg; back,
+        so each letter is mostly up but slightly rearward. The height slide takes a tube angle, read the way
+        you would read a seat tube or head tube angle: 73 leans back, 90 is vertical. The fore/aft and
+        reach slides are near level, so they take a tilt off horizontal: 0 is level, +3 rises 3&deg;,
+        &minus;3 drops 3&deg;. Which way along a slide a bigger reading travels is carried by the sign
+        of its mm-per-unit, so use a negative gain if the scale counts the other way. Every field
+        prints back what it means in words &mdash; if that sentence disagrees with the bike in front
+        of you, the number is wrong. The values below are measured off the bike; section 2 can
+        re-solve them from a bike you already know.
+      </div>
+      <div class="grid cols2">
+        <div><h3>Saddle carriage</h3><div class="grid cols2" style="gap:0 12px" id="saddle-carriage-fields"></div></div>
+        <div><h3>Handlebar carriage</h3><div class="grid cols2" style="gap:0 12px" id="bar-carriage-fields"></div></div>
+      </div>
+      <h3 style="margin-top:14px">Standover mechanism</h3>
+      <div class="grid cols4" style="gap:0 12px">
+        <div class="field"><label>Standover step per letter (mm)</label>
+          <input type="text" inputmode="decimal" data-fit-bike="standoverStepMm">
+          <div class="hint">Measured along the rise axis, not vertically.</div></div>
+        <div class="field"><label>Standover axis lean back (&deg;)</label>
+          <input type="text" inputmode="decimal" data-fit-bike="standoverRiseBackDegrees">
+          <div class="hint" data-hint-for="standoverRise"></div></div>
+      </div>
+    </details>
+  </div>
+
+  <div style="height:12px"></div>
+  <div class="readout" id="target-readout"></div>
+</section>
+
+<section>
+  <h2>2 &mdash; Calibrate from a bike you already know</h2>
+  <div class="panel">
+    <div class="note" style="margin-bottom:10px">
+      Rather than measuring the fit bike, set it up to match a bike whose build you know and note the standover position and scale
+      readings. The app works out where those two points sit from that frame's geometry and its actual stem,
+      spacers and seatpost, then back-solves the constants above. One reference fixes the zero positions.
+      Two or more also fit the travel per unit and report how well everything agrees.
+    </div>
+    <div class="scroll"><table id="reference-table"></table></div>
+    <div class="btnrow" style="margin-top:10px">
+      <button class="ghost" id="check-constants">Check current constants</button>
+      <button id="solve-constants">Solve constants &mdash; overwrites</button>
+      <span class="status" id="reference-note"></span>
+    </div>
+    <div id="calibration-result" style="margin-top:10px"></div>
+  </div>
+</section>
+
+<section>
+  <h2>3 &mdash; Candidate frames
+    <span class="btnrow"><button class="tiny" id="add-frame">Add frame</button>
+    <button class="ghost tiny" id="toggle-paste">Paste a geometry table</button></span></h2>
+  <div id="paste-panel" class="panel" style="display:none;margin-bottom:14px">
+    <h3>Paste geometry</h3>
+    <div class="note" style="margin-bottom:8px">Copy the geometry table off the manufacturer's page and paste it here. Rows are matched by label; pick the column for your size. Check the parsed values before importing &mdash; table layouts vary.</div>
+    <textarea id="paste-input" placeholder="Stack&#9;528&#9;545&#9;565&#9;585&#10;Reach&#9;372&#9;377&#9;381&#9;387&#10;Head tube angle&#9;71.5&#9;72&#9;72.5&#9;73&#10;Seat tube angle&#9;74.5&#9;74&#9;73.5&#9;73.5"></textarea>
+    <div class="btnrow" style="margin-top:8px"><button class="tiny" id="parse-paste">Parse</button><button class="ghost tiny" id="close-paste">Close</button></div>
+    <div id="parse-output" style="margin-top:10px"></div>
+  </div>
+  <div id="frame-list"></div>
+</section>
+
+<section>
+  <h2>4 &mdash; Side view <span class="status" id="side-view-label"></span></h2>
+  <svg id="side-view" viewBox="0 0 900 760" role="img" aria-label="Scale side view of the target position and the solved stem"></svg>
+  <div class="note" style="margin-top:6px">Drawn to scale from the bottom bracket. Blue is the highlighted frame's steerer axis; the thick blue segment is the spacer stack and the arm running forward is the solved stem. The red ring is where the bar clamp needs to end up.</div>
+</section>
+
+<section>
+  <h2>5 &mdash; Compare</h2>
+  <div class="scroll"><table id="compare-table"></table></div>
+</section>
+
+<section>
+  <h2>6 &mdash; Reverse: set the fit bike up to match a real bike <span class="status" id="reverse-label"></span></h2>
+  <div class="panel">
+    <div class="note" style="margin-bottom:10px">
+      The other direction. Fill in the highlighted frame's <i>as built</i> figures in section 3 &mdash; its
+      actual stem, spacers, saddle height and rail offset &mdash; and this says what to set the fit bike to so
+      you sit in the same place. Standover shifts both carriages together, so every position below is an exact
+      answer and none is more correct than another: pick whichever keeps all four readings on the scales.
+      Readings are rounded to the millimetre, as the scales are marked, so the round trip lands within about
+      1&nbsp;mm rather than exactly. Click a frame card or a compare row to switch which frame this reads.
+    </div>
+    <div class="scroll"><table id="reverse-table"></table></div>
+  </div>
+</section>
+
+<section>
+  <h2>7 &mdash; Parts catalogue and limits</h2>
+  <div class="panel grid cols2">
+    <div>
+      <div class="field"><label>Stem lengths available (mm)</label><input type="text" data-option="stemLengths"></div>
+      <div class="field"><label>Stem angles available (&deg;)</label><input type="text" data-option="stemAngles">
+        <div class="hint">Each angle is also tried flipped, so entering positives is enough.</div></div>
+      <div class="field"><label>Spacer increment (mm)</label><input type="text" inputmode="decimal" data-option="spacerStep"></div>
+    </div>
+    <div>
+      <div class="grid cols2" style="gap:0 12px">
+        <div class="field"><label>Warn if stem &lt; (mm)</label><input type="text" inputmode="decimal" data-option="minStemLength"></div>
+        <div class="field"><label>Warn if stem &gt; (mm)</label><input type="text" inputmode="decimal" data-option="maxStemLength"></div>
+        <div class="field"><label>Warn if |angle| &gt; (&deg;)</label><input type="text" inputmode="decimal" data-option="maxStemAngle"></div>
+        <div class="field"><label>Solutions shown per frame</label><input type="text" inputmode="decimal" data-option="solutionsPerFrame"></div>
+      </div>
+      <div class="field"><label>Good-enough tolerance (mm)</label><input type="text" inputmode="decimal" data-option="toleranceMm">
+        <div class="hint">Miss distance at the bar clamp below which a solution counts as a match.</div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Assumptions worth checking</h2>
+  <div class="note">
+    <p><b>Standover rise.</b> Positions A through H translate both horizontal reach/setback masts along a single axis that leans back from vertical. A is the reference; each following letter adds 20&nbsp;mm <i>measured along that axis</i>, through H at 140&nbsp;mm. At the 4&deg; lean entered above that works out as 19.95&nbsp;mm up and 1.40&nbsp;mm back per letter, so A to H is 139.7&nbsp;mm up and 9.8&nbsp;mm back. The rearward part is small per letter but reaches roughly 10&nbsp;mm at H, which is more than the match tolerance &mdash; if the axis is actually vertical, set the lean to 0.</p>
+    <p><b>Headset stack.</b> Frame stack is measured to the top of the head tube, but spacers start on top of the upper headset cover. That cover is 5&ndash;20&nbsp;mm depending on the frame and it moves the answer by exactly its own height. It is per-frame and defaults to 15&nbsp;mm.</p>
+    <p><b>Stem stack height.</b> Stem angle is measured from perpendicular to the steerer, and the stem's clamp is roughly 40&nbsp;mm tall, so half of it is added above the spacers to reach the bar clamp centreline.</p>
+    <p><b>Saddle height across seat angles.</b> The same saddle position produces a different saddle height number on a frame with a different seat angle. The per-frame figure is recomputed along that frame's own axis rather than carried across.</p>
+    <p><b>Saddle.</b> The fit bike's saddle carriage locates the rail clamp, so run the saddle you actually ride. Nose-to-rail and rail drop only affect the drawing and the reported saddle height, not the seatpost answer.</p>
+  </div>
+</section>
+
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

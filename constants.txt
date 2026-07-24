@@ -1,0 +1,12 @@
+Height from floor to 0 height on seatpost at position A: 735mm
+Height from floor to BB center: 260mm
+Distance from BB to seat at 0 height and 0 setback: -128mm
+Height from floor to center of steerer at 0 reach: 770mm
+Distance from BB X coordinate to center of steerer at 0 reach: 336mm
+
+Angles:
+
+- Standover mast: 4 degree incline
+- Standover Rise: 4 degrees back
+- Saddle height: 86 degree seat tube angle
+- head tube angle: 76 degrees
