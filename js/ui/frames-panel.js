@@ -214,17 +214,36 @@ function asBuiltSection(frame, onChange) {
 }
 
 function frameActions(frame, onChange) {
+  /**
+   * Record this frame as a bike the fit bike has been set up to match.
+   *
+   * It captures the readings currently entered in section 1, which is the point of pressing
+   * it — it used to copy the standover position but leave all four readings at zero, so the
+   * row arrived looking like it had picked nothing up. They stay editable in the table.
+   *
+   * Still one reference per frame, but pressing it again re-captures rather than doing
+   * nothing at all, which is indistinguishable from a dead button.
+   */
   const useAsReference = () => {
-    if (state.references.some(reference => reference.frameId === frame.id)) return;
-    state.references.push({
-      frameId: frame.id,
+    const readings = {
       standover: normaliseStandover(state.readings.standover),
-      saddleHeight: 0,
-      saddleForeAft: 0,
-      barHeight: 0,
-      barReach: 0,
-    });
+      saddleHeight: state.readings.saddleHeight,
+      saddleForeAft: state.readings.saddleForeAft,
+      barHeight: state.readings.barHeight,
+      barReach: state.readings.barReach,
+    };
+
+    const existing = state.references.find(reference => reference.frameId === frame.id);
+    if (existing) Object.assign(existing, readings);
+    else state.references.push({ frameId: frame.id, ...readings });
+
     onChange();
+
+    // After onChange, since the redraw is what writes this note in the first place. It is
+    // transient — the next keystroke replaces it with the standing hint.
+    const note = select('#reference-note');
+    note.textContent =
+      `${existing ? 'Updated' : 'Added'} ${frame.name} from the readings now entered - ${note.textContent}`;
     select('#reference-table').scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 

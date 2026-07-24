@@ -54,6 +54,11 @@ the fit bike up to match a bike you already know, note the readings, and a least
 fit recovers them. One reference pins the zero points; two or more also fit the
 mm-per-unit.
 
+"Use as calibration reference" captures whatever section 1 currently says — that is the
+point of the button. One reference per frame, and pressing it again re-captures rather than
+doing nothing, since a button that silently no-ops is indistinguishable from a broken one.
+The same rule applies to "Undo solve", which now says when there is nothing to undo.
+
 ## Three directions
 
 The same model runs three ways, which is worth keeping straight:
@@ -180,7 +185,7 @@ python3 -m http.server 8000
 # then open http://localhost:8000/tests/
 ```
 
-It runs all three suites and prints a tally (248 checks at the time of writing). Each
+It runs all three suites and prints a tally (254 checks at the time of writing). Each
 suite is also a standalone page if you want to read one in isolation.
 
 | Suite | Covers |

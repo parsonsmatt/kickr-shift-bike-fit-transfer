@@ -219,10 +219,15 @@ export function bindCalibrationButtons(onChange) {
           {
             class: 'ghost tiny',
             onclick: () => {
-              if (!undoSolve()) return;
-              clearChildren(select('#calibration-result')).append(
-                element('div', { class: 'okbox' }, 'Constants put back the way you had them.'),
-              );
+              // Same rule as the reference button: never fail silently, or the button looks dead.
+              const host = clearChildren(select('#calibration-result'));
+              if (!undoSolve()) {
+                host.append(
+                  element('div', { class: 'warnbox' }, 'Nothing to undo - no solve has been applied.'),
+                );
+                return;
+              }
+              host.append(element('div', { class: 'okbox' }, 'Constants put back the way you had them.'));
               onChange();
             },
           },

@@ -180,9 +180,26 @@ try {
 
   /* ---- 9. calibrate: check, then solve, then undo ---- */
   const cardButtons = label => $$('#frame-list button').filter(b => b.textContent.trim() === label);
+  // The button has to capture what section 1 currently says. It used to take the standover
+  // position and leave the four readings at zero.
+  const currentReadings = ['saddleHeight', 'saddleForeAft', 'barHeight', 'barReach']
+    .map(key => $(`[data-reading="${key}"]`).value);
   cardButtons('Use as calibration reference')[0].click();
   check('one reference row', $('#reference-table tbody').children.length, 1);
   check('reference note', /zero points only/.test($('#reference-note').textContent), true);
+  check('the note says what it just did', /Added .* from the readings now entered/.test($('#reference-note').textContent), true);
+  check('the readings entered were captured, not zeroed',
+        $$('#reference-table tbody input').map(i => Number(i.value)), currentReadings.map(Number));
+  check('and the standover position came with them',
+        $('#reference-table tbody select').value, $('[data-reading="standover"]').value);
+
+  // Pressing it again must re-capture rather than silently do nothing.
+  type($('[data-reading="barReach"]'), '5.5');
+  cardButtons('Use as calibration reference')[0].click();
+  check('pressing it again does not add a duplicate', $('#reference-table tbody').children.length, 1);
+  check('and re-captures the changed reading', $$('#reference-table tbody input')[3].value, '5.5');
+  check('and says it updated rather than added',
+        /Updated .* from the readings now entered/.test($('#reference-note').textContent), true);
 
   const referenceInputs = $$('#reference-table tbody input');
   check('four reading inputs', referenceInputs.length, 4);
