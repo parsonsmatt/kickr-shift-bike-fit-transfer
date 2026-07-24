@@ -74,14 +74,18 @@ both carriages together, so **every one of the eight positions has an exact set 
 readings**, and geometrically none is more correct than another. Something has to choose, so
 section 6 takes the **lowest position that stays on the scales** and lists the rest below it.
 
-Since the scales' travel is not recorded anywhere, the only test it can apply is that a
-scale cannot read below its own zero mark — so a negative reading rules a position *out*,
-but nothing rules one *in*; a position can still ask for more travel than the machine has at
-the top. Raising the standover *reduces* the reading needed to reach a fixed point, so
-running off the bottom is a high-letter problem: "lowest that fits" is therefore A unless
-the position you are copying sits below a carriage's own zero mark. On the default frame
-A–F are usable and G–H are not. Recording each scale's actual travel is what would turn
-this from a one-sided check into a real range check.
+What "fits" means depends on how much of the machine has been measured. A scale can never
+read below its own zero mark, so that bound always applies. The top of each scale's travel is
+the four `mastMaxReading` / `slideMaxReading` constants, and **0 means unmeasured** — read as
+a real limit it would rule out everything, so it is treated as no limit at all.
+
+Which bound bites where is worth knowing, because it decides whether the rule means
+anything. Raising the standover raises both carriages, so it *reduces* the reading needed to
+reach a fixed point. The bottom of the travel therefore rules out the **high** letters and
+the top of the travel rules out the **low** ones. With the maximums left at 0 only the bottom
+applies, nothing rules out A, and "the lowest that fits" is A every time. Measure them and
+the rule starts doing real work — capping the seatpost scale two units below what position A
+asks for moves the answer to B.
 
 Section 6 also prints the *as built* figures it derived everything from. Those live in a
 collapsed panel on the frame card, and the summary used to read "needed only to use this
@@ -112,6 +116,7 @@ js/model/geometry-table.js  parsing a pasted manufacturer geometry table
 
 js/ui/render.js             redraws everything; refresh() = save then render
 js/ui/focus.js              keeps the caret alive across a redraw
+js/ui/disclosure.js         keeps a <details> open across a redraw
 js/ui/fields.js             labelled inputs, readout cells, chips, tables
 js/ui/fit-bike-panel.js     section 1
 js/ui/calibration-panel.js  section 2
@@ -128,10 +133,18 @@ in `js/model/` reads the current `state`. Only `js/ui/*` touches the DOM.
 ## Rendering
 
 The whole page is redrawn on every keystroke. It is a small page, and one code path from
-state to screen is much easier to trust than a set of targeted updates. The only thing
-that has to survive a redraw is the text caret, which `js/ui/focus.js` handles by keying
-each input on a unique `data-path` and remembering the *raw* text — so typing "1." does
-not get rewritten to "1" mid-number.
+state to screen is much easier to trust than a set of targeted updates.
+
+Two things have to survive that redraw, and both work the same way — remember the state
+against a stable key, since the element itself is a new one every time:
+
+- the **text caret**, which `js/ui/focus.js` handles by keying each input on a unique
+  `data-path` and remembering the *raw* text, so typing "1." does not get rewritten to "1"
+  mid-number;
+- whether a **`<details>` is open**, which `js/ui/disclosure.js` handles. Without it, typing
+  one character into a field inside a rebuilt `<details>` snaps it shut. Only applies to
+  disclosures built in JavaScript — the ones written directly into `index.html` are never
+  rebuilt, so they keep their own state for free.
 
 ## Glossary
 
@@ -147,6 +160,7 @@ Names used throughout, in case a term is unfamiliar:
 | `exactSpacerHeight` | What the steerer axis wants before rounding to whole spacers. Negative means the front end is already too tall. |
 | `missMm` | Straight-line distance from where the bar clamp lands to where it should be. |
 | `reachable` | The solution needs no negative spacers and no more than the frame has. |
+| `mastMaxReading` / `slideMaxReading` | How far a scale actually goes, in scale units — the top of the seatpost mast's travel, the front column's rise, and the same for the two horizontal slides. **0 means not measured**, and is treated as no upper limit rather than as a zero-length scale. |
 | `needsNegativeSpacers` | The bar would have to sit below the frame's own slammed height. Not a build, so the stem table leaves these out entirely rather than printing a negative spacer stack. If a frame has nothing left, the card says how far above the target its closest option still sits. The model keeps them — the ranking already sorts them last — so only the display filters. |
 | `railClamp` | Centre of the saddle rail clamp — what the fit bike's saddle carriage actually locates. |
 | `railsBelowSaddleTop` | Saddle shell stack: rail centre to the top of the saddle. |
@@ -166,7 +180,7 @@ python3 -m http.server 8000
 # then open http://localhost:8000/tests/
 ```
 
-It runs all three suites and prints a tally (226 checks at the time of writing). Each
+It runs all three suites and prints a tally (248 checks at the time of writing). Each
 suite is also a standalone page if you want to read one in isolation.
 
 | Suite | Covers |

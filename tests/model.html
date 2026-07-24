@@ -8,8 +8,8 @@
 // hard-coded outputs, so they stay meaningful if a constant changes.
 import { state, adoptState, defaultState } from '../js/state.js';
 import { createFrame, barClampPosition, railClampPosition, steererUp, asBuiltPositions } from '../js/model/frame.js';
-import { carriagePosition, carriageReadings, targetPositions, standoverOffsetFor, standoverTravelFor } from '../js/model/fit-bike.js';
-import { trainerSetups } from '../js/model/reverse.js';
+import { carriagePosition, carriageReadings, targetPositions, standoverOffsetFor, standoverTravelFor, scaleLimit, readingOnScale } from '../js/model/fit-bike.js';
+import { trainerSetups, lowestStandoverSetup } from '../js/model/reverse.js';
 import { standoverOffset, STANDOVER_POSITIONS } from '../js/model/standover.js';
 import { stemSolutions, bestStemSolution, saddleSetup, targetBarClamp, targetRailClamp, fitSpacerHeight, needsNegativeSpacers } from '../js/model/solver.js';
 import { fitCarriage, residuals, worstResidual, solveConstants, referenceObservations } from '../js/model/calibration.js';
@@ -302,9 +302,42 @@ check('a higher standover position needs a smaller height reading',
 note('A readings', ['saddleHeight', 'saddleForeAft', 'barHeight', 'barReach'].map(k => Number(setups[0][k].toFixed(2))));
 note('on scale', setups.filter(s => s.onScale).map(s => s.standover));
 
-// A negative reading is off the bottom of the scale, and that is the only thing onScale claims.
-check('onScale is exactly "no reading below zero"',
+// Unmeasured maximums mean the only test is "no reading below zero".
+check('with no maximums measured, onScale is exactly "no reading below zero"',
       setups.every(s => s.onScale === ['saddleHeight', 'saddleForeAft', 'barHeight', 'barReach'].every(k => s[k] >= 0)));
+
+// Measuring the top of a scale's travel is what rules out the LOW letters, and that is what
+// makes "the lowest position that fits" a real choice rather than always A.
+const unlimited = lowestStandoverSetup(ridden);
+check('with no maximums measured the lowest that fits is A', unlimited.standover === 'A');
+
+state.carriages.saddle.mastMaxReading = unlimited.saddleHeight - 2;
+const limited = trainerSetups(ridden);
+check('a measured maximum rules the low positions out', limited[0].onScale === false);
+check('and names the scale responsible', limited[0].offScale.join(',') === 'saddleHeight');
+const nowLowest = lowestStandoverSetup(ridden);
+check('so the lowest that fits moves up the alphabet', nowLowest && nowLowest.standover !== 'A');
+check('and the chosen row really is on the scales', nowLowest.onScale === true);
+check('and it is the first such row', limited.findIndex(s => s.onScale) === STANDOVER_POSITIONS.indexOf(nowLowest.standover));
+note('lowest that fits, saddle scale capped', nowLowest.standover);
+
+// A limit small enough to rule out every position must return nothing rather than a row
+// that does not fit.
+state.carriages.saddle.mastMaxReading = 0.0001;
+check('no position fitting returns null, not a bad row', lowestStandoverSetup(ridden) === null);
+
+// 0 has to mean "not measured" — read as a real limit it would rule out everything.
+state.carriages.saddle.mastMaxReading = 0;
+check('a maximum of 0 means unmeasured, not a zero-length scale',
+      scaleLimit(state.carriages.saddle, 'mast') === null);
+check('so every position is back on the scales', lowestStandoverSetup(ridden).standover === 'A');
+check('readingOnScale still refuses a negative reading',
+      readingOnScale(state.carriages.saddle, 'mast', -0.1) === false);
+state.carriages.saddle.mastMaxReading = 20;
+check('and refuses one past a measured maximum',
+      readingOnScale(state.carriages.saddle, 'mast', 20.1) === false);
+check('but accepts the maximum itself',
+      readingOnScale(state.carriages.saddle, 'mast', 20) === true);
 
 // The inverse of a carriage is the inverse of the forward model for arbitrary points too.
 reset();

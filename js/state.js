@@ -40,21 +40,29 @@ export function defaultState() {
     //   saddle zeroY = 735 - 260,  bar zeroY = 770 - 260
     // The scales read in centimetres exactly, so every gain is 10 mm per unit.
     carriages: {
+      // The two max readings are how far each scale actually goes — the top of the seatpost
+      // mast's travel, the top of the front column's, and the same for the two horizontal
+      // slides. 0 means "not measured yet" and is treated as no limit, so leaving them
+      // alone changes nothing.
       saddle: {
         zeroX: -128, // BB to the rail clamp at zero height and zero setback
         zeroY: 475,
         mastAngle: 86, // read like a seat tube angle
         mastMmPerUnit: 10, // a bigger reading raises the saddle
+        mastMaxReading: 0, // top of the seatpost mast's travel, in scale units
         slideTilt: 4, // the fore/aft mast is inclined: forward rises, back drops
         slideMmPerUnit: -10, // a bigger reading is more setback, so back and slightly down
+        slideMaxReading: 0,
       },
       bar: {
         zeroX: 336, // BB to the steerer centre at zero reach
         zeroY: 510,
         mastAngle: 76,
         mastMmPerUnit: 10, // a bigger reading raises the bar
+        mastMaxReading: 0, // top of the front column's rise
         slideTilt: 4, // the reach mast is inclined: forward rises
         slideMmPerUnit: 10, // a bigger reading is more reach, so forward and slightly up
+        slideMaxReading: 0,
       },
     },
 

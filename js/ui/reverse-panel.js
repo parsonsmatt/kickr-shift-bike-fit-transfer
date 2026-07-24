@@ -11,6 +11,7 @@ import { state } from '../state.js';
 import { SCALE_INPUTS } from '../model/fit-bike.js';
 import { trainerSetups, lowestStandoverSetup } from '../model/reverse.js';
 import { readoutCell, tableHead, tableBody, chip } from './fields.js';
+import { disclosure } from './disclosure.js';
 
 const SCALE_KEYS = Object.keys(SCALE_INPUTS);
 
@@ -75,15 +76,19 @@ function alternatives(setups, onApply) {
       { class: isInUse(setup) ? 'best' : '' },
       element('td', {}, element('b', {}, setup.standover)),
       ...SCALE_KEYS.map(key => element('td', {}, oneDecimal(setup[key]))),
-      element('td', {}, setup.onScale ? chip('on scale', true) : chip('off the bottom', false)),
+      element(
+        'td',
+        {},
+        setup.onScale
+          ? chip('on scale', true)
+          : chip(`off the scale: ${setup.offScale.map(key => SCALE_INPUTS[key].label.toLowerCase()).join(', ')}`, false),
+      ),
       element('td', {}, applyButton(setup, onApply, 'Use')),
     ),
   );
 
-  return element(
-    'details',
-    { style: 'margin-top:12px' },
-    element('summary', {}, 'Every standover position — all exact, just higher'),
+  return disclosure(
+    { key: 'reverse.alternatives', summary: 'Every standover position — all exact, just higher' },
     element(
       'div',
       { class: 'scroll' },

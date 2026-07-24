@@ -3,6 +3,7 @@
 
 import { select, selectAll, clearChildren, element } from '../lib/dom.js';
 import { oneDecimal, whole, toNumber } from '../lib/format.js';
+import { magnitude } from '../lib/vector.js';
 import { state } from '../state.js';
 import { normaliseStandover, STANDOVER_POSITIONS } from '../model/standover.js';
 import {
@@ -15,8 +16,22 @@ import {
   describeScaleUnit,
   describeMast,
   describeSlide,
+  scaleLimit,
+  travelPerUnit,
 } from '../model/fit-bike.js';
 import { numberField, readoutCell } from './fields.js';
+
+/** What a scale's measured travel adds to its hint, and a warning if the reading is past it. */
+function describeScaleRange(readingKey) {
+  const scale = SCALE_INPUTS[readingKey];
+  const carriage = state.carriages[scale.carriage];
+  const limit = scaleLimit(carriage, scale.axis);
+  if (limit === null) return '';
+
+  const travel = Math.abs(limit * magnitude(travelPerUnit(carriage, scale.axis)));
+  const range = ` Runs 0 to ${oneDecimal(limit)}, so ${whole(travel)}mm of travel.`;
+  return state.readings[readingKey] > limit ? `${range} That reading is past the end of it.` : range;
+}
 
 /** Labels and hints under the four scale inputs, restated from the current constants. */
 export function renderScaleHints() {
@@ -24,7 +39,8 @@ export function renderScaleHints() {
 
   for (const [readingKey, scale] of Object.entries(SCALE_INPUTS)) {
     select(`[data-label-for="${readingKey}"]`).textContent = scale.label;
-    select(`[data-hint-for="${readingKey}"]`).textContent = `${scale.hint} ${describeScaleUnit(readingKey)}`;
+    select(`[data-hint-for="${readingKey}"]`).textContent =
+      `${scale.hint} ${describeScaleUnit(readingKey)}${describeScaleRange(readingKey)}`;
   }
 
   // What the standover axis angle costs per letter, so a wrong angle is visible here.
@@ -35,9 +51,25 @@ export function renderScaleHints() {
 }
 
 const CARRIAGE_PANELS = [
-  { key: 'saddle', host: '#saddle-carriage-fields', mastLabel: 'Seat mast angle (deg)', slideName: 'Fore/aft' },
-  { key: 'bar', host: '#bar-carriage-fields', mastLabel: 'Front column angle (deg)', slideName: 'Reach' },
+  {
+    key: 'saddle',
+    host: '#saddle-carriage-fields',
+    mastLabel: 'Seat mast angle (deg)',
+    mastName: 'Seatpost height',
+    slideName: 'Fore/aft',
+  },
+  {
+    key: 'bar',
+    host: '#bar-carriage-fields',
+    mastLabel: 'Front column angle (deg)',
+    mastName: 'Handlebar rise',
+    slideName: 'Reach',
+  },
 ];
+
+const MAX_READING_HINT =
+  'The biggest number on the scale, in scale units. Leave it at 0 until you have measured it - ' +
+  'then no upper limit is checked and only a reading below zero counts as off the scale.';
 
 /** The constants panel: zero point and both slides, for each carriage. */
 export function renderCarriageConstants(onChange) {
@@ -65,12 +97,14 @@ export function renderCarriageConstants(onChange) {
       'Read like a seat tube or head tube angle: 73 leans back, 90 is vertical. ' + describeMast(carriage),
     );
     field('mastMmPerUnit', 'mm per unit', 'Negative if a bigger reading lowers it.');
+    field('mastMaxReading', `Max ${panel.mastName.toLowerCase()} reading`, MAX_READING_HINT);
     field(
       'slideTilt',
       `${panel.slideName} slide tilt (deg)`,
       'Tilt off level: 0 level, +3 rising, -3 falling. ' + describeSlide(carriage),
     );
     field('slideMmPerUnit', 'mm per unit', 'Negative if a bigger reading moves it rearward.');
+    field('slideMaxReading', `Max ${panel.slideName.toLowerCase()} reading`, MAX_READING_HINT);
   }
 }
 

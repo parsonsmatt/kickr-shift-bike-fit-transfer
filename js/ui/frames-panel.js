@@ -8,6 +8,7 @@ import { createFrame, newFrameId } from '../model/frame.js';
 import { normaliseStandover } from '../model/standover.js';
 import { stemSolutions, saddleSetup, isMatch, needsNegativeSpacers } from '../model/solver.js';
 import { numberField, textField, readoutCell, chip, table } from './fields.js';
+import { disclosure } from './disclosure.js';
 
 /** A numeric field on a frame; the field path is scoped by frame id. */
 const frameField = (frame, field, label, hint, onChange) =>
@@ -181,10 +182,12 @@ function saddleSection(frame) {
  * past it.
  */
 function asBuiltSection(frame, onChange) {
-  return element(
-    'details',
-    { open: true },
-    element('summary', {}, 'As currently built - what this bike has on it now (feeds calibration and the reverse setup)'),
+  return disclosure(
+    {
+      key: `${frame.id}.asBuilt`,
+      summary: 'As currently built - what this bike has on it now (feeds calibration and the reverse setup)',
+      open: true,
+    },
     element(
       'div',
       { class: 'grid cols3' },

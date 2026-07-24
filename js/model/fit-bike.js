@@ -58,6 +58,34 @@ export const mastDirection = carriage => unitVectorAt(180 - carriage.mastAngle);
 
 export const slideDirection = carriage => unitVectorAt(carriage.slideTilt);
 
+/**
+ * How far a scale goes, in scale units, or null when it has not been measured. 0 means
+ * unmeasured rather than "a scale with no travel", since a zero-length scale is not a thing
+ * and treating it as a limit would rule out every position.
+ */
+export function scaleLimit(carriage, axis) {
+  const limit = axis === 'mast' ? carriage.mastMaxReading : carriage.slideMaxReading;
+  return limit > 0 ? limit : null;
+}
+
+/**
+ * Whether a reading is a number this scale can actually show: never below its own zero
+ * mark, and never past the end of its travel. The lower bound always applies; the upper one
+ * only once it has been measured.
+ */
+export function readingOnScale(carriage, axis, reading) {
+  if (!(reading >= 0)) return false;
+  const limit = scaleLimit(carriage, axis);
+  return limit === null || reading <= limit;
+}
+
+/** Which of the four scales a reading is off the end of, as a list of reading keys. */
+export const offScaleReadings = readings =>
+  Object.keys(SCALE_INPUTS).filter(key => {
+    const scale = SCALE_INPUTS[key];
+    return !readingOnScale(state.carriages[scale.carriage], scale.axis, readings[key]);
+  });
+
 /** How far and which way one scale unit moves the carriage, as a vector in mm. */
 export function travelPerUnit(carriage, axis) {
   const direction = axis === 'mast' ? mastDirection(carriage) : slideDirection(carriage);

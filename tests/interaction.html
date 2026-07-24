@@ -308,6 +308,43 @@ try {
   check('the message quantifies the shortfall',
         /still sits [0-9]+\.[0-9]mm above the target/.test($('#frame-list .warnbox').textContent), true);
   note('too-tall message', $('#frame-list .warnbox').textContent.slice(0, 95));
+
+  /* ---- 17. a <details> built by JS survives a redraw ---- */
+  // Every keystroke rebuilds the page, so a rebuilt <details> went back to its default and
+  // snapped shut while you were typing in it.
+  const asBuilt = () => $('#frame-list details');
+  check('the as-built panel starts open', asBuilt().open, true);
+  type($('[data-path$=".builtStemLength"]'), '110');
+  check('and stays open while you type in it', asBuilt().open, true);
+
+  asBuilt().open = false;
+  asBuilt().dispatchEvent(new Event('toggle'));
+  type($('[data-path$=".builtStemLength"]'), '115');
+  check('closing it is remembered too, not overridden back open', asBuilt().open, false);
+  check('the edits still landed', $('[data-path$=".builtStemLength"]').value, '115');
+
+  /* ---- 18. measured scale maximums rule out the low standover positions ---- */
+  // Until a maximum is measured the only test is "not below zero", which only ever rules out
+  // high letters — so the lowest that fits is A. Measuring the top of the travel is what
+  // makes the choice mean anything.
+  const chosenStandover = () => $$('#reverse-panel .readout .v')[0].textContent;
+  check('with nothing measured, the lowest that fits is A', chosenStandover(), 'A');
+  const saddleHeightReading = Number($$('#reverse-panel .readout .v')[1].textContent);
+
+  $('#constants-details').open = true;
+  type($('[data-path="carriages.saddle.mastMaxReading"]'), String(saddleHeightReading - 2));
+  check('capping the seatpost scale moves the answer up the alphabet',
+        chosenStandover() !== 'A', true);
+  note('chosen standover once the seatpost scale is capped', chosenStandover());
+  check('the ruled-out row names the scale responsible',
+        /off the scale: saddle height/.test($$('#reverse-panel tbody tr')[0].textContent), true);
+  check('section 1 warns when a reading is past the end of a scale',
+        /past the end of it/.test($('[data-hint-for="saddleHeight"]').textContent), true);
+
+  type($('[data-path="carriages.saddle.mastMaxReading"]'), '0');
+  check('back to 0 means unmeasured, so A fits again', chosenStandover(), 'A');
+  check('and section 1 stops quoting a range',
+        /Runs 0 to/.test($('[data-hint-for="saddleHeight"]').textContent), false);
 } catch (error) {
   log.push('THREW ' + (error && error.stack ? error.stack : error));
 }

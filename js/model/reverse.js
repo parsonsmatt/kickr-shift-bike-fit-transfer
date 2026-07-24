@@ -14,7 +14,7 @@
 import { state } from '../state.js';
 import { asBuiltPositions } from './frame.js';
 import { STANDOVER_POSITIONS } from './standover.js';
-import { SCALE_INPUTS, carriageReadings, standoverOffsetFor } from './fit-bike.js';
+import { carriageReadings, offScaleReadings, standoverOffsetFor } from './fit-bike.js';
 
 /** The four readings that reproduce `positions` with the standover at `letter`. */
 export function readingsFor(positions, letter) {
@@ -35,19 +35,19 @@ export function readingsFor(positions, letter) {
 /**
  * One row per standover position, for a frame as it is currently built.
  *
- * `onScale` flags the rows worth trying. We do not know the length of each scale, but a
- * scale cannot read below its own zero mark, so a negative reading means that standover
- * position runs the carriage off the bottom of its travel. That rules rows out, never in —
- * a row can still ask for more travel than the machine has at the top end.
+ * `onScale` flags the rows worth trying, and `offScale` names the scales that spoil the
+ * ones that are not. A reading below zero is off the bottom of the travel and always rules a
+ * row out; a reading past the end of the scale only rules one out once that scale's length
+ * has been measured (`mastMaxReading` / `slideMaxReading`, 0 meaning unmeasured).
  */
 export function trainerSetups(frame) {
   const positions = asBuiltPositions(frame, state.fitBike.railsBelowSaddleTop);
-  const scaleKeys = Object.keys(SCALE_INPUTS);
 
   return STANDOVER_POSITIONS.map(letter => {
     const readings = readingsFor(positions, letter);
     if (!readings) return null;
-    return { ...readings, onScale: scaleKeys.every(key => readings[key] >= 0) };
+    const offScale = offScaleReadings(readings);
+    return { ...readings, offScale, onScale: offScale.length === 0 };
   }).filter(Boolean);
 }
 
@@ -56,8 +56,10 @@ export function trainerSetups(frame) {
  * come back in A..H order, so that is just the first one on the scales.
  *
  * Worth knowing which way this leans: raising the standover raises both carriages, so it
- * *reduces* the reading needed to reach a fixed point. Running off the bottom of a scale is
- * therefore a high-letter problem, and the lowest position that works is A unless the
- * position you are copying sits below the carriage's own zero mark. Null when nothing fits.
+ * *reduces* the reading needed to reach a fixed point. So the bottom of the travel is what
+ * rules out the *high* letters and the top of the travel is what rules out the *low* ones —
+ * which is why measuring the maximum readings is what makes "the lowest that fits" mean
+ * anything. Until they are measured only the bottom applies, and the answer is nearly always
+ * A. Null when no position fits.
  */
 export const lowestStandoverSetup = frame => trainerSetups(frame).find(row => row.onScale) || null;
