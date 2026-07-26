@@ -116,7 +116,7 @@ try {
   /* ---- 3. state is persisted, in the new schema ---- */
   await sleep(400);
   const saved = JSON.parse(localStorage.getItem('fit-transfer-v2'));
-  check('saved schemaVersion', saved.schemaVersion, 4);
+  check('saved schemaVersion', saved.schemaVersion, 5);
   check('saved reading', saved.readings.saddleHeight, 18.5);
   check('saved uses new frame field names', 'headTubeAngle' in saved.frames[0], true);
   check('save status says saved', /^saved \|/.test($('#save-status').textContent), true);
@@ -180,61 +180,20 @@ try {
   check('imported size name', pastedRow && pastedRow.children[1].textContent, '56');
   check('paste panel closed', $('#paste-panel').style.display, 'none');
 
-  /* ---- 9. calibrate: capture a reference, then check against it ---- */
+  /* ---- 9. the constants panel is measure-and-reset only ---- */
   const cardButtons = label => $$('#frame-list button').filter(b => b.textContent.trim() === label);
-  // The button has to capture what section 1 currently says. It used to take the standover
-  // position and leave the four readings at zero.
-  const currentReadings = ['saddleHeight', 'saddleForeAft', 'barHeight', 'barReach']
-    .map(key => $(`[data-reading="${key}"]`).value);
-  cardButtons('Use as calibration reference')[0].click();
-  check('one reference row', $('#reference-table tbody').children.length, 1);
-  check('reference note', /checking against one bike/.test($('#reference-note').textContent), true);
-  check('the note says what it just did', /Added .* from the readings now entered/.test($('#reference-note').textContent), true);
-  check('the readings entered were captured, not zeroed',
-        $$('#reference-table tbody input').map(i => Number(i.value)), currentReadings.map(Number));
-  check('and the standover position came with them',
-        $('#reference-table tbody select').value, $('[data-reading="standover"]').value);
+  // Section 2 used to check the constants against bikes you already know, and offered to
+  // solve them from those references. Both are gone: the constants are measured off the
+  // machine, and the reverse direction already tells you what a known bike should read.
+  $('#constants-details').open = true;
+  for (const gone of ['#check-constants', '#reference-table', '#reference-note', '#calibration-result'])
+    check(`${gone} is gone`, $(gone), null);
+  check('no button offers to solve the constants', buttonByText('Check current constants'), undefined);
+  check('and none offers to capture a calibration reference',
+        cardButtons('Use as calibration reference').length, 0);
+  check('nothing stores references any more', 'references' in JSON.parse(localStorage.getItem('fit-transfer-v2')), false);
 
-  // Pressing it again must re-capture rather than silently do nothing.
-  type($('[data-reading="barReach"]'), '5.5');
-  cardButtons('Use as calibration reference')[0].click();
-  check('pressing it again does not add a duplicate', $('#reference-table tbody').children.length, 1);
-  check('and re-captures the changed reading', $$('#reference-table tbody input')[3].value, '5.5');
-  check('and says it updated rather than added',
-        /Updated .* from the readings now entered/.test($('#reference-note').textContent), true);
-
-  const referenceInputs = $$('#reference-table tbody input');
-  check('four reading inputs', referenceInputs.length, 4);
-  type(referenceInputs[0], '15.0');
-  type(referenceInputs[1], '7.0');
-  type($$('#reference-table tbody input')[2], '9.0');
-  type($$('#reference-table tbody input')[3], '4.0');
-
-  $('#check-constants').click();
-  check('check produced a verdict box', !!$('#calibration-result .warnbox, #calibration-result .okbox'), true);
-  note('check says', $('#calibration-result div').textContent.slice(0, 70));
-  check('constants panel opened', $('#constants-details').open, true);
-
-  // Section 2 is read-only. It must never move a constant, and there must be no button that does.
-  const zeroXBefore = Number($('[data-path="carriages.saddle.zeroX"]').value);
-  check('checking left the constants alone',
-        Number($('[data-path="carriages.saddle.zeroX"]').value), zeroXBefore);
-  check('there is no solve button', $('#solve-constants'), null);
-  check('and no undo button', buttonByText('Undo solve'), undefined);
-
-  /* ---- 10. a second reference is checked too ---- */
-  cardButtons('Use as calibration reference')[1].click();
-  check('two reference rows', $('#reference-table tbody').children.length, 2);
-  check('reference note counts them', /checking against 2 bikes/.test($('#reference-note').textContent), true);
-  const refInputs = $$('#reference-table tbody input');
-  type(refInputs[4], '17.5'); type(refInputs[5], '5.5'); type(refInputs[6], '12.0'); type(refInputs[7], '6.0');
-  pick($$('#reference-table tbody select')[1], 'C');
-  $('#check-constants').click();
-  check('both references appear in the residual table', $('#calibration-result tbody').children.length, 2);
-  check('constants still untouched after checking two',
-        Number($('[data-path="carriages.saddle.zeroX"]').value), zeroXBefore);
-
-  /* ---- 10b. reset puts the constants back to the measured defaults ---- */
+  /* ---- 10. reset puts the constants back to the measured defaults ---- */
   window.confirm = () => true;
   // Typed rather than poked into the state, so this also covers the redraw putting the
   // remembered keystrokes back over the value the reset just restored.
@@ -248,12 +207,11 @@ try {
   check('reset did not touch the frames', $('#frame-list').children.length, 2);
   check('or the readings', $('[data-reading="saddleHeight"]').value, '18.5');
 
-  /* ---- 11. duplicate, and removing a frame drops its reference ---- */
+  /* ---- 11. duplicate and remove ---- */
   cardButtons('Duplicate as another size')[0].click();
   check('three frames after duplicate', $('#frame-list').children.length, 3);
-  const referencesBefore = $('#reference-table tbody').children.length;
   cardButtons('Remove')[0].click();
-  check('reference removed with its frame', $('#reference-table tbody').children.length, referencesBefore - 1);
+  check('two frames after removing one', $('#frame-list').children.length, 2);
 
   /* ---- 12. hood match mode shifts the bar target ---- */
   const barTargetX = () => $$('#target-readout .v')[3].textContent;
@@ -284,7 +242,6 @@ try {
   /* ---- 14. reset ---- */
   $('#reset-all').click();
   check('reset leaves one default frame', $('#frame-list').children.length, 1);
-  check('reset clears references', $('#reference-table tbody').children[0].getAttribute('colspan') !== null || $('#reference-table tbody').textContent.includes('No references yet'), true);
   check('reset restored default readings', $('[data-reading="saddleHeight"]').value, '9');
   check('and the default standover position', $('[data-reading="standover"]').value, 'D');
 

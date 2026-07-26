@@ -1,4 +1,4 @@
-// Section 3's "paste a geometry table" panel: show what was parsed, let the user pick the
+// Section 2's "paste a geometry table" panel: show what was parsed, let the user pick the
 // size column, then add it as a frame.
 
 import { select, element, clearChildren } from '../lib/dom.js';

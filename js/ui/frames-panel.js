@@ -1,11 +1,10 @@
-// Section 3: one card per candidate frame — its geometry, the stem options that hit the
+// Section 2: one card per candidate frame — its geometry, the stem options that hit the
 // target, and what the saddle has to do.
 
 import { select, element, clearChildren } from '../lib/dom.js';
 import { oneDecimal, whole, signedOneDecimal } from '../lib/format.js';
 import { state } from '../state.js';
 import { createFrame, newFrameId, spacerRoom, asBuiltOverflowsSteerer } from '../model/frame.js';
-import { normaliseStandover } from '../model/standover.js';
 import { stemSolutions, saddleSetup, isMatch, needsNegativeSpacers } from '../model/solver.js';
 import { numberField, textField, readoutCell, chip, table } from './fields.js';
 import { disclosure } from './disclosure.js';
@@ -200,17 +199,16 @@ function saddleSection(frame) {
 }
 
 /**
- * The "as currently built" fields — what is actually bolted to this bike today, as opposed
- * to what the solver is proposing. Two things read them: calibration references (section 2)
- * and the reverse setup (section 6), so the summary has to say both. It used to say
- * "needed only" for calibration, which sent anyone looking for section 6's input straight
- * past it.
+ * The "as currently built" fields — what is actually bolted to this bike today, as opposed to
+ * what the solver is proposing. The reverse setup in section 5 is what reads them, and the
+ * summary has to say so: it used to claim they were "needed only to use this frame as a
+ * calibration reference", which sent anyone looking for section 5's input straight past it.
  */
 function asBuiltSection(frame, onChange) {
   return disclosure(
     {
       key: `${frame.id}.asBuilt`,
-      summary: 'As currently built - what this bike has on it now (feeds calibration and the reverse setup)',
+      summary: 'As currently built - what this bike has on it now (this is what the reverse setup reads)',
       open: true,
     },
     element(
@@ -244,39 +242,6 @@ function asBuiltSection(frame, onChange) {
 }
 
 function frameActions(frame, onChange) {
-  /**
-   * Record this frame as a bike the fit bike has been set up to match.
-   *
-   * It captures the readings currently entered in section 1, which is the point of pressing
-   * it — it used to copy the standover position but leave all four readings at zero, so the
-   * row arrived looking like it had picked nothing up. They stay editable in the table.
-   *
-   * Still one reference per frame, but pressing it again re-captures rather than doing
-   * nothing at all, which is indistinguishable from a dead button.
-   */
-  const useAsReference = () => {
-    const readings = {
-      standover: normaliseStandover(state.readings.standover),
-      saddleHeight: state.readings.saddleHeight,
-      saddleForeAft: state.readings.saddleForeAft,
-      barHeight: state.readings.barHeight,
-      barReach: state.readings.barReach,
-    };
-
-    const existing = state.references.find(reference => reference.frameId === frame.id);
-    if (existing) Object.assign(existing, readings);
-    else state.references.push({ frameId: frame.id, ...readings });
-
-    onChange();
-
-    // After onChange, since the redraw is what writes this note in the first place. It is
-    // transient — the next keystroke replaces it with the standing hint.
-    const note = select('#reference-note');
-    note.textContent =
-      `${existing ? 'Updated' : 'Added'} ${frame.name} from the readings now entered - ${note.textContent}`;
-    select('#reference-table').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
-
   const duplicate = () => {
     const copy = { ...frame, id: newFrameId(), size: (frame.size || '') + ' copy' };
     state.frames.splice(state.frames.indexOf(frame) + 1, 0, copy);
@@ -285,7 +250,6 @@ function frameActions(frame, onChange) {
 
   const remove = () => {
     state.frames = state.frames.filter(other => other !== frame);
-    state.references = state.references.filter(reference => reference.frameId !== frame.id);
     onChange();
   };
 
@@ -298,7 +262,6 @@ function frameActions(frame, onChange) {
       state.activeFrameId = frame.id;
       onChange();
     }),
-    action('Use as calibration reference', useAsReference),
     action('Duplicate as another size', duplicate),
     action('Remove', remove),
   );

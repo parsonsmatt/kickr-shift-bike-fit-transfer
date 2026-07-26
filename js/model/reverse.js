@@ -1,10 +1,10 @@
 // The reverse direction: you already ride a bike you like, so what do you dial into the
 // fit bike to sit in the same place?
 //
-// The other two directions in this app are sections 1/3 (fit bike -> frame) and section 2
-// (frame -> the fit bike's constants). This one is frame -> readings, and it reuses both
-// halves: `asBuiltPositions` says where a real build puts the two points, and
-// `carriageReadings` inverts the carriage model to say what the scales must read.
+// The forward direction is sections 1 and 2: readings -> where the two points are -> what to
+// bolt on a frame. This is the inverse, frame -> readings, and it reuses both halves:
+// `asBuiltPositions` says where a real build puts the two points, and `carriageReadings`
+// inverts the carriage model to say what the scales must read to get there.
 //
 // Standover makes the answer a family rather than a single set of numbers. It translates
 // both carriages together, so *every* one of the eight positions has an exact set of

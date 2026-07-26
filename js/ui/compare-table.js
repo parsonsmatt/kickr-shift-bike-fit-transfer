@@ -1,4 +1,4 @@
-// Section 5: every candidate frame side by side with its best answer, so the trade-offs
+// Section 4: every candidate frame side by side with its best answer, so the trade-offs
 // between frames are visible at a glance. Clicking a row highlights that frame.
 
 import { select, element, clearChildren } from '../lib/dom.js';

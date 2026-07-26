@@ -4,7 +4,7 @@
 <pre id="results">running</pre>
 <script type="module">
 // Numerical tests for the maths, with no DOM involved: frame geometry, the stem solver,
-// and the calibration estimator. These check invariants and round trips rather than
+// and the reverse solve. These check invariants and round trips rather than
 // hard-coded outputs, so they stay meaningful if a constant changes.
 import { state, adoptState, defaultState } from '../js/state.js';
 import { createFrame, barClampPosition, railClampPosition, steererUp, asBuiltPositions,
@@ -13,7 +13,6 @@ import { carriagePosition, carriageReadings, targetPositions, standoverOffsetFor
 import { trainerSetups, lowestStandoverSetup } from '../js/model/reverse.js';
 import { standoverOffset, STANDOVER_POSITIONS } from '../js/model/standover.js';
 import { stemSolutions, bestStemSolution, saddleSetup, targetBarClamp, targetRailClamp, fitSpacerHeight, needsNegativeSpacers } from '../js/model/solver.js';
-import { residuals, worstResidual, checkConstants, referenceObservations } from '../js/model/calibration.js';
 
 const log = [];
 let failures = 0;
@@ -208,75 +207,7 @@ near('clamp mode ignores the bar reach', clampModeTarget[0], targetBarClamp({ ..
 near('hood mode pulls a longer-reach bar back by the difference',
   targetBarClamp({ ...frame, barReach: 95 })[0], clampModeTarget[0] - 20, 1e-9);
 
-/* ================ 5. the calibration estimator ================ */
-log.push('== calibration estimator');
-reset();
-
-// Known-truth constants, deliberately unlike the defaults.
-const TRUTH = { zeroX: -143.7, zeroY: 468.2, mastAngle: 86, mastMmPerUnit: 10,
-                slideTilt: 4, slideMmPerUnit: -10 };
-// Observations at DIFFERENT standover letters, so the rearward part of the rise cannot be
-// quietly absorbed into the zero point.
-const SAMPLES = [{ letter: 'A', mast: 15.2, slide: 7.0 },
-                 { letter: 'D', mast: 17.8, slide: 4.5 },
-                 { letter: 'H', mast: 13.1, slide: 9.2 }];
-const observations = SAMPLES.map(sample => {
-  const offset = standoverOffsetFor(sample.letter);
-  return { mastReading: sample.mast, slideReading: sample.slide, standoverOffset: offset,
-           position: carriagePosition(TRUTH, sample.mast, sample.slide, offset) };
-});
-// Section 2 only ever reads. Given the true constants, every observation must come back
-// with no residual at all.
-state.carriages.saddle = { ...TRUTH };
-state.carriages.bar = { ...TRUTH };
-const asPairs = observations.map(o => ({ name: 'sample', saddle: o, bar: o }));
-near('the true constants reproduce every observation', worstResidual(residuals(asPairs)), 0, 1e-9);
-
-// And a wrong constant has to show up, at its own size — that is the whole value of the check.
-state.carriages.bar = { ...TRUTH, zeroX: TRUTH.zeroX + 12 };
-near('a zero point out by 12mm reads as a 12mm miss', worstResidual(residuals(asPairs)), 12, 1e-9);
-state.carriages.bar = { ...TRUTH, mastMmPerUnit: TRUTH.mastMmPerUnit + 1 };
-check('travel per unit being wrong also shows up', worstResidual(residuals(asPairs)) > 10);
-note('worst residual with mm-per-unit out by 1', worstResidual(residuals(asPairs)).toFixed(1) + 'mm');
-state.carriages.bar = { ...TRUTH };
-
-// A wrong lean angle must SHOW UP as a residual rather than be absorbed anywhere.
-state.fitBike.standoverRiseBackDegrees = 0;
-const reoffset = asPairs.map((pair, i) => {
-  const offset = standoverOffsetFor(SAMPLES[i].letter);
-  return { ...pair, saddle: { ...pair.saddle, standoverOffset: offset },
-                    bar: { ...pair.bar, standoverOffset: offset } };
-});
-const leanResidual = worstResidual(residuals(reoffset));
-check('pretending the axis is vertical produces a visible residual', leanResidual > 5);
-near('and that residual is the A-to-H setback', leanResidual, 9.77, 0.01);
-note('worst residual with the lean wrongly set to 0', leanResidual.toFixed(2) + 'mm');
-state.fitBike.standoverRiseBackDegrees = 4;
-
-// With nothing to check against, say so rather than reporting a vacuous pass.
-reset();
-state.references = [];
-const noRefs = checkConstants();
-check('checking with no references refuses', noRefs.ok === false);
-check('and says what to do about it', /Add at least one reference/.test(noRefs.message));
-
-reset();
-const twinA = createFrame('Twin A');
-const twinB = createFrame('Twin B');
-state.frames = [twinA, twinB];
-state.references = [
-  { frameId: twinA.id, standover: 'A', saddleHeight: 15, saddleForeAft: 7, barHeight: 9, barReach: 4 },
-  { frameId: twinB.id, standover: 'A', saddleHeight: 15, saddleForeAft: 7, barHeight: 9, barReach: 4 },
-];
-const twoRefs = checkConstants();
-check('two references check without complaint', twoRefs.ok === true);
-check('and both are reported on', twoRefs.residuals.length === 2);
-
-// A reference pointing at a deleted frame is dropped, not crashed on.
-state.references.push({ frameId: 'does-not-exist', standover: 'A', saddleHeight: 1, saddleForeAft: 1, barHeight: 1, barReach: 1 });
-near('observations skip references with no frame', referenceObservations().length, 2);
-
-/* ---------- 7. reverse: a real bike back to fit bike readings ---------- */
+/* ================ 5. reverse: a real bike back to fit bike readings ================ */
 // The strong claim: type the readings this produces into section 1 and the target lands
 // back on the as-built position. Checked against the machine's measured constants, not a
 // contrived pair, so a sign error in either direction shows up.

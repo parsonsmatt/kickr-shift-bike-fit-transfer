@@ -4,7 +4,7 @@
 import { select, selectAll, clearChildren, element } from '../lib/dom.js';
 import { oneDecimal, whole, toNumber } from '../lib/format.js';
 import { magnitude } from '../lib/vector.js';
-import { state } from '../state.js';
+import { state, resetConstants } from '../state.js';
 import { normaliseStandover, STANDOVER_POSITIONS } from '../model/standover.js';
 import {
   SCALE_INPUTS,
@@ -20,6 +20,7 @@ import {
   travelPerUnit,
 } from '../model/fit-bike.js';
 import { numberField, readoutCell } from './fields.js';
+import { forgetFocus } from './focus.js';
 
 /** What a scale's measured travel adds to its hint, and a warning if the reading is past it. */
 function describeScaleRange(readingKey) {
@@ -166,7 +167,28 @@ export function syncStaticInputs() {
   });
 }
 
-/** Wires the static section 1 and section 6 inputs to the state. */
+/**
+ * The one button in the constants panel. There is deliberately nothing here that derives a
+ * constant from anything: they are measured off the machine, so the only sensible repair for
+ * a wrong one is the tape measure or these defaults.
+ */
+export function bindConstantsReset(onChange) {
+  select('#reset-constants').onclick = () => {
+    const confirmed = confirm(
+      'Put both carriages and the standover mechanism back to the measured defaults? ' +
+        'Your frames, readings and current setup are not affected.',
+    );
+    if (!confirmed) return;
+    resetConstants();
+    // Before the redraw, which would otherwise write the last thing typed back over a
+    // constant this just restored.
+    forgetFocus();
+    onChange();
+    select('#reset-constants-note').textContent = 'back to the measured defaults';
+  };
+}
+
+/** Wires the static section 1 and section 5 inputs to the state. */
 export function bindStaticInputs(onChange) {
   selectAll('[data-reading]').forEach(input =>
     input.addEventListener('input', event => {

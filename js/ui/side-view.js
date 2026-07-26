@@ -1,4 +1,4 @@
-// Section 4: a scale side view of the highlighted frame, drawn from the bottom bracket.
+// Section 3: a scale side view of the highlighted frame, drawn from the bottom bracket.
 // It exists as a sanity check — a sign error in the constants usually looks obviously
 // wrong here long before the numbers give it away.
 

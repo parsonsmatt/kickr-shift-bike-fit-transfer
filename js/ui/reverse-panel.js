@@ -1,4 +1,4 @@
-// Section 6: the reverse direction — what to dial into the fit bike so it matches a bike
+// Section 5: the reverse direction — what to dial into the fit bike so it matches a bike
 // you already ride.
 //
 // Every standover position is an exact answer, so something has to choose. The rule is the
@@ -37,7 +37,7 @@ const applyButton = (setup, onApply, label) => {
 
 /**
  * The figures this whole section is derived from, spelled out. They live in a collapsed
- * panel on the frame card, so without this it is not obvious that section 6 has any input
+ * panel on the frame card, so without this it is not obvious that section 5 has any input
  * at all, let alone that it is reading placeholder numbers.
  */
 function sourceLine(frame) {
@@ -48,7 +48,7 @@ function sourceLine(frame) {
       `${oneDecimal(frame.builtStemLength)}mm stem at ${signedOneDecimal(frame.builtStemAngle)} deg, ` +
       `${oneDecimal(frame.builtSpacerHeight)}mm of spacers, saddle ${oneDecimal(frame.builtSaddleHeight)}mm ` +
       `along its seat axis, rails ${signedOneDecimal(frame.builtRailOffset)}mm from centre. ` +
-      'Change those in that frame\'s "as currently built" panel in section 3 — this section is only ' +
+      'Change those in that frame\'s "as currently built" panel in section 2 — this section is only ' +
       'as right as they are.',
   );
 }

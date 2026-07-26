@@ -10,7 +10,6 @@ import {
   renderTargetReadout,
   syncStaticInputs,
 } from './fit-bike-panel.js';
-import { renderReferenceTable } from './calibration-panel.js';
 import { renderFrames } from './frames-panel.js';
 import { renderCompareTable } from './compare-table.js';
 import { renderReverseTable } from './reverse-panel.js';
@@ -24,11 +23,10 @@ import { renderSideView } from './side-view.js';
 function refreshFrameNames() {
   save();
   renderCompareTable(refresh);
-  renderReferenceTable(refresh);
 }
 
 /**
- * Section 6 writes the four scale readings, which live in static inputs in the markup
+ * Section 5 writes the four scale readings, which live in static inputs in the markup
  * rather than being rebuilt each redraw, so they have to be pushed back out by hand.
  */
 function applyReadings() {
@@ -40,7 +38,6 @@ export function render() {
   renderScaleHints();
   renderCarriageConstants(refresh);
   renderTargetReadout();
-  renderReferenceTable(refresh);
   renderFrames(refresh, refreshFrameNames);
   renderCompareTable(refresh);
   renderReverseTable(applyReadings);

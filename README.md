@@ -51,40 +51,36 @@ The measured constants for this bike are the defaults in `js/state.js`, derived 
 
 Every constant is editable, but **an end user should never need to touch one**. They
 describe the machine, not the rider, and if one is wrong that means it was mismeasured here —
-so the constants panel offers "Reset to measured defaults" rather than any way to derive
-them. Section 2 is a **sanity check only**: set the fit bike up to match a bike you already
-know, note the readings, and it reports how far the constants miss that bike.
+so the constants panel offers "Reset to measured defaults" and nothing else.
 
-There used to be a least-squares fit in section 2 that solved the constants from those
-references and wrote them back. It was removed. Solving means trusting the references more
-than the tape measure, and one reference with a reading left at zero was enough to quietly
-move a carriage's zero point onto that bike — which is exactly what happened: it landed the
-bar zero on a reference frame's bar clamp, after which section 6 reported bar readings of
-0.0 that were perfectly self-consistent and completely wrong.
+There were two attempts at deriving them, and both are gone. First a least-squares fit that
+solved the constants from bikes you already know: it trusted those references over the tape
+measure, and one reference with a reading left at zero was enough to move a carriage's zero
+point onto that bike — which is what happened, landing the bar zero on a reference frame's own
+bar clamp, after which the reverse direction reported bar readings of 0.0 that were perfectly
+self-consistent and completely wrong. What was left was a read-only version that only reported
+how far the constants missed each reference, and that went too: the reverse direction already
+prints the readings a known bike needs, so comparing those with what the machine actually says
+is the same check without a stored table to keep in step.
 
-"Use as calibration reference" captures whatever section 1 currently says — that is the
-point of the button. One reference per frame, and pressing it again re-captures rather than
-doing nothing, since a button that silently no-ops is indistinguishable from a broken one.
+## Two directions
 
-## Three directions
-
-The same model runs three ways, which is worth keeping straight:
+The same model runs both ways, which is worth keeping straight:
 
 | | From | To | Where |
 | --- | --- | --- | --- |
-| forward | readings | stem, angle, spacers on a frame | sections 1, 3, 5 |
-| check | a known bike + its readings | how far the constants miss it | section 2 |
-| reverse | a bike you already ride | the readings to dial into the fit bike | section 6 |
+| forward | readings | stem, angle, spacers on a frame | sections 1, 2, 4 |
+| reverse | a bike you already ride | the readings to dial into the fit bike | section 5 |
 
 The reverse direction is the exact inverse of the carriage model rather than a fit: two
 slides, two unknowns, one 2×2 solve per carriage (`carriageReadings`). It reuses
-`asBuiltPositions` to get the two points off a real build, so it works from the same *as
-built* stem/spacers/saddle figures that a calibration reference uses.
+`asBuiltPositions` to get the two points off a real build, so it reads the *as built*
+stem/spacers/saddle figures on the frame card and nothing else.
 
 Standover makes that answer a family rather than a single set of numbers: it translates
 both carriages together, so **every one of the eight positions has an exact set of
 readings**, and geometrically none is more correct than another. Something has to choose, so
-section 6 takes the **lowest position that stays on the scales** and lists the rest below it.
+section 5 takes the **lowest position that stays on the scales** and lists the rest below it.
 
 What "fits" means depends on how much of the machine has been measured. A scale can never
 read below its own zero mark, so that bound always applies. The top of each scale's travel is
@@ -106,10 +102,10 @@ adjustment, and the 70 mm scale is the fine one. That is also why the default re
 `js/state.js` sit at position D: they are the setup that reproduces the default frame's own *as
 built* figures, so a fresh page shows a working answer instead of a frame nothing can reach.
 
-Section 6 also prints the *as built* figures it derived everything from. Those live in a
+Section 5 also prints the *as built* figures it derived everything from. Those live in a
 collapsed panel on the frame card, and the summary used to read "needed only to use this
-frame as a calibration reference" — which sent anyone looking for section 6's input straight
-past it. It now names both readers and starts open.
+frame as a calibration reference" — which sent anyone looking for this section's input straight
+past it. It now names its reader and starts open.
 
 ## Files
 
@@ -129,7 +125,6 @@ js/model/standover.js       standover positions A-H and the rise axis
 js/model/fit-bike.js        the carriage model: readings to target positions
 js/model/frame.js           a candidate frame, and its bar/saddle geometry (pure)
 js/model/solver.js          stem length, angle and spacers that hit the target
-js/model/calibration.js     checking the constants against a bike you know
 js/model/reverse.js         the other way round: a real bike back to fit bike readings
 js/model/geometry-table.js  parsing a pasted manufacturer geometry table
 
@@ -137,13 +132,12 @@ js/ui/render.js             redraws everything; refresh() = save then render
 js/ui/focus.js              keeps the caret alive across a redraw
 js/ui/disclosure.js         keeps a <details> open across a redraw
 js/ui/fields.js             labelled inputs, readout cells, chips, tables
-js/ui/fit-bike-panel.js     section 1
-js/ui/calibration-panel.js  section 2
-js/ui/frames-panel.js       section 3
-js/ui/paste-panel.js        section 3's geometry paste
-js/ui/side-view.js          section 4, the scale drawing
-js/ui/compare-table.js      section 5
-js/ui/reverse-panel.js      section 6, readings per standover position
+js/ui/fit-bike-panel.js     section 1, including the constants panel and its reset
+js/ui/frames-panel.js       section 2
+js/ui/paste-panel.js        section 2's geometry paste
+js/ui/side-view.js          section 3, the scale drawing
+js/ui/compare-table.js      section 4
+js/ui/reverse-panel.js      section 5, readings per standover position
 ```
 
 `js/lib/*` and `js/model/frame.js` are pure functions of their arguments. Everything else
@@ -206,14 +200,14 @@ python3 -m http.server 8000
 # then open http://localhost:8000/tests/
 ```
 
-It runs all three suites and prints a tally (283 checks at the time of writing). Each
+It runs all three suites and prints a tally (259 checks at the time of writing). Each
 suite is also a standalone page if you want to read one in isolation.
 
 | Suite | Covers |
 | --- | --- |
-| `tests/model.html` | The maths, no DOM: standover as a vector, the stem solver hitting a reachable target exactly, saddle round trips, crank and bar-reach compensation, the calibration check reporting zero miss on true constants and a real one on wrong constants, and the reverse solve inverting the forward one at all eight standover positions. |
-| `tests/interaction.html` | The real UI, driven: typing, the caret surviving a redraw, add/remove/duplicate frames, pasting a geometry table, checking the constants against two references, resetting them to the measured defaults, reset all, and applying a reverse setup. |
-| `tests/migration.html` | Loads a save written by the previous single-file version and checks every field survives the rename, ids and references included. Also that a version 3 save skips the rename step and only has its spacer field converted — the migration applies one version's change at a time, and running the rename over an already-renamed save finds none of the keys it looks for and hands back an empty one. |
+| `tests/model.html` | The maths, no DOM: standover as a vector, the stem solver hitting a reachable target exactly, saddle round trips, crank and bar-reach compensation, the steerer limit, and the reverse solve inverting the forward one at all eight standover positions. |
+| `tests/interaction.html` | The real UI, driven: typing, the caret surviving a redraw, add/remove/duplicate frames, pasting a geometry table, resetting the constants to the measured defaults, reset all, and applying a reverse setup. |
+| `tests/migration.html` | Loads a save written by the previous single-file version and checks every field survives the rename, ids included, and that the stored calibration references are dropped. Also that a version 3 save skips the rename step and only has its spacer field converted — the migration applies one version's change at a time, and running the rename over an already-renamed save finds none of the keys it looks for and hands back an empty one. |
 
 The suites run **one at a time**, and the runner tears each frame down before starting the
 next. Two of them own `localStorage`, and a suite publishes its results before its app's

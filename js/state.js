@@ -7,8 +7,6 @@
 //   fitBike         fixed facts about the fit bike itself, plus how to match bar position
 //   options         parts catalogue and the warning thresholds
 //   frames          candidate frames (see model/frame.js)
-//   references      calibration references: a frame id plus the scale readings that
-//                   reproduced it on the fit bike
 //   activeFrameId   which frame the side view draws
 
 import { createFrame } from './model/frame.js';
@@ -21,8 +19,9 @@ import { normaliseStandover } from './model/standover.js';
  *   2  mast angles switched to the tube-angle convention (73 leans back, 90 vertical)
  *   3  every field renamed to a spelled-out name
  *   4  frames store exposedSteerer (a measurable length) rather than spacersAvailable
+ *   5  calibration references dropped along with the constants check that read them
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export function defaultState() {
   return {
@@ -99,7 +98,6 @@ export function defaultState() {
     },
 
     frames: [createFrame('Frame A')],
-    references: [],
     activeFrameId: null,
   };
 }
@@ -159,8 +157,6 @@ const FRAME_NAMES = {
   open: 'expanded',
 };
 
-const REFERENCE_NAMES = { bikeId: 'frameId', ...READING_NAMES };
-
 const renameKeys = (object = {}, names) =>
   Object.fromEntries(Object.entries(object || {}).map(([key, value]) => [names[key] || key, value]));
 
@@ -185,7 +181,6 @@ function renameEverything(saved, version) {
     fitBike: renameKeys(saved.fit, FIT_BIKE_NAMES),
     options: renameKeys(saved.opt, OPTION_NAMES),
     frames: (saved.bikes || []).map(frame => renameKeys(frame, FRAME_NAMES)),
-    references: (saved.cal || []).map(reference => renameKeys(reference, REFERENCE_NAMES)),
     activeFrameId: saved.activeId ?? null,
   };
 }
@@ -209,6 +204,18 @@ function useExposedSteerer(saved) {
   };
 }
 
+/**
+ * Version 5: the old section 2 checked the constants against bikes you already know, and stored those
+ * bikes as references. It was a read-only diagnostic that the reverse direction already covers
+ * - it prints the readings a known bike needs, which you can compare with what you actually
+ * set - so the section went and the stored references go with it. Dropped explicitly, since
+ * adoptState spreads whatever it is given and would otherwise carry the array forever.
+ */
+function dropReferences(saved) {
+  const { references, ...rest } = saved;
+  return rest;
+}
+
 /** Rewrites a save from any earlier version into the current shape, one version at a time. */
 function migrate(saved) {
   const version = Number(saved.schemaVersion ?? saved.conv ?? 1);
@@ -217,6 +224,7 @@ function migrate(saved) {
   let current = saved;
   if (version < 3) current = renameEverything(current, version);
   if (version < 4) current = useExposedSteerer(current);
+  if (version < 5) current = dropReferences(current);
   return { ...current, schemaVersion: SCHEMA_VERSION };
 }
 
@@ -241,10 +249,6 @@ export function adoptState(saved) {
       bar: { ...base.carriages.bar, ...incoming.carriages?.bar },
     },
     frames: (incoming.frames || []).map(frame => ({ ...createFrame(), ...frame })),
-    references: (incoming.references || []).map(reference => ({
-      ...reference,
-      standover: normaliseStandover(reference.standover),
-    })),
   };
 
   state.readings.standover = normaliseStandover(state.readings.standover);

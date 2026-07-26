@@ -37,7 +37,8 @@ export function createFrame(name = 'New frame', size = '', crankLength = 170) {
     seatpostSetback: 0,
     railTravel: 25, // how far the saddle can slide either way from rail centre
 
-    // As currently built. Only needed to use this frame as a calibration reference.
+    // As currently built. Read by the reverse direction, which turns them into the fit bike
+    // readings that would put you in this same position.
     builtStemLength: 100,
     builtStemAngle: -6,
     builtSpacerHeight: 20,

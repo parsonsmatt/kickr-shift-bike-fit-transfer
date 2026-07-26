@@ -3,8 +3,7 @@
 import { select } from './lib/dom.js';
 import { state, adoptState, resetState } from './state.js';
 import { loadSaved, onSaveStatus } from './persistence.js';
-import { bindStaticInputs, syncStaticInputs } from './ui/fit-bike-panel.js';
-import { bindCalibrationButtons } from './ui/calibration-panel.js';
+import { bindStaticInputs, syncStaticInputs, bindConstantsReset } from './ui/fit-bike-panel.js';
 import { bindFrameButtons } from './ui/frames-panel.js';
 import { bindPastePanel } from './ui/paste-panel.js';
 import { forgetFocus } from './ui/focus.js';
@@ -69,7 +68,7 @@ async function start() {
   }
 
   bindStaticInputs(refresh);
-  bindCalibrationButtons(refresh);
+  bindConstantsReset(refresh);
   bindFrameButtons(refresh);
   bindPastePanel(refresh);
   bindFileButtons();
