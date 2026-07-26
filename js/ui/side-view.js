@@ -5,7 +5,7 @@
 import { select, svgElement, clearChildren } from '../lib/dom.js';
 import { oneDecimal, whole, signedOneDecimal } from '../lib/format.js';
 import { state } from '../state.js';
-import { steererUp, seatAxisUp, steererPointAtBarHeight, barClampPosition } from '../model/frame.js';
+import { steererUp, seatAxisUp, steererPointAtBarHeight, barClampPosition, asBuiltPositions } from '../model/frame.js';
 import { targetPositions } from '../model/fit-bike.js';
 import { bestStemSolution, saddleSetup, targetBarClamp } from '../model/solver.js';
 
@@ -24,7 +24,7 @@ const COLOUR = {
 const CANVAS = { width: 900, height: 760, padTop: 26, padBottom: 54, padSide: 64 };
 
 // The slice of the bike, in mm from the bottom bracket, that has to fit on the canvas.
-const WORLD = { xMin: -320, xMax: 620, yMin: -40, yMax: 800 };
+const WORLD = { xMin: -320, xMax: 700, yMin: -40, yMax: 800 };
 
 const GRID_STEP_MM = 100;
 const SEAT_AXIS_OVERSHOOT = 1.05; // draw the seat axis slightly past the saddle
@@ -84,6 +84,25 @@ function createCanvas(svg) {
   };
 }
 
+/**
+ * Which of the two quantities was matched, spelled out. The target ring moves by the
+ * difference in bar reach between the modes, and a silent 30mm shift in the thing everything
+ * else is measured from is not something to leave to the reader.
+ */
+function drawMatchCaption(canvas, frame) {
+  const hoods = state.fitBike.matchMode === 'hoods';
+  canvas.text(
+    [WORLD.xMin + 16, WORLD.yMax],
+    hoods
+      ? `matching hood position: bar reach ${whole(state.fitBike.barReach)} on the fit bike, ` +
+        `${whole(frame.barReach)} on this frame, so the clamp target moves ` +
+        `${signedOneDecimal(state.fitBike.barReach - frame.barReach)}mm`
+      : `matching bar clamp centre: assumes the same bar on both bikes, so this frame's ` +
+        `${whole(frame.barReach)}mm bar reach is not used`,
+    { fill: COLOUR.muted, size: 11, dy: -10 },
+  );
+}
+
 /** Grid, ground line and the bottom bracket cross that everything is measured from. */
 function drawReferenceFrame(canvas) {
   for (let x = -300; x <= 600; x += GRID_STEP_MM) {
@@ -115,7 +134,7 @@ function drawFrontEnd(canvas, frame, solution) {
     { stroke: COLOUR.steerer, 'stroke-width': 1.5, 'stroke-dasharray': '4 4' },
   );
   canvas.dot(headTubeTop, COLOUR.steerer, 4);
-  canvas.text(headTubeTop, 'head tube top', { dx: 8, dy: -6, fill: COLOUR.steerer });
+  canvas.text(headTubeTop, 'head tube top', { dx: -8, dy: 14, anchor: 'end', fill: COLOUR.steerer });
 
   if (!solution) return;
 
@@ -151,6 +170,41 @@ function drawFrontEnd(canvas, frame, solution) {
   });
 }
 
+/**
+ * What is bolted to this bike today, drawn faintly behind the solved answer.
+ *
+ * Without it the drawing shows only the best option out of the catalogue, which reads as
+ * though it were describing the bike — so a solution that is nothing like the current build
+ * looks like a statement of fact rather than a proposal. Both stems from the same steerer,
+ * and the gap between the two bar clamps is the change being asked for.
+ */
+function drawAsBuilt(canvas, frame, railsBelowSaddleTop) {
+  const ghost = { stroke: COLOUR.dim, 'stroke-width': 3, 'stroke-dasharray': '5 4', opacity: 0.9 };
+  const stemBase = steererPointAtBarHeight(frame, frame.builtSpacerHeight);
+  const built = asBuiltPositions(frame, railsBelowSaddleTop);
+
+  canvas.line(stemBase, built.bar, ghost);
+  canvas.ring(built.bar, COLOUR.dim, 5);
+  // This label is long, and a tall build puts its clamp near the right-hand edge, so it flips
+  // to the other side of the ring rather than running off the canvas.
+  const roomOnTheRight = built.bar[0] < WORLD.xMax - 260;
+  canvas.text(
+    built.bar,
+    `as built ${whole(frame.builtStemLength)} x ${signedOneDecimal(frame.builtStemAngle)}, ` +
+      `${oneDecimal(frame.builtSpacerHeight)}mm spacers`,
+    {
+      dx: roomOnTheRight ? 12 : -12,
+      dy: roomOnTheRight ? 4 : -10,
+      anchor: roomOnTheRight ? 'start' : 'end',
+      fill: COLOUR.dim,
+      size: 11,
+    },
+  );
+
+  canvas.ring(built.saddle, COLOUR.dim, 5);
+  canvas.text(built.saddle, 'as built', { dx: -10, dy: -8, anchor: 'end', fill: COLOUR.dim, size: 10 });
+}
+
 /** Seat axis, saddle and the rail clamp under it. */
 function drawSaddle(canvas, frame, saddle) {
   const seatAxis = seatAxisUp(frame.seatTubeAngle);
@@ -179,22 +233,38 @@ function drawSaddle(canvas, frame, saddle) {
   return { saddleTopY, noseX };
 }
 
-/** The bar clamp we are aiming at, with reach and drop measured off the saddle. */
-function drawBarTarget(canvas, target, { saddleTopY, noseX }) {
+/**
+ * The bar clamp we are aiming at, with reach and drop measured off the saddle nose.
+ *
+ * Both are measured to the *clamp*, which is not where your hands go — so where the hoods
+ * land is drawn too, since the frame's own bar reach is known either way. Whether that hood
+ * position is what got matched depends on the match mode, so the label says which.
+ */
+function drawBarTarget(canvas, frame, target, { saddleTopY, noseX }) {
   canvas.ring(target, COLOUR.target);
-  canvas.text(target, 'target bar', { dx: 14, dy: 4, fill: COLOUR.target });
+  canvas.text(target, 'target bar', { dx: -14, dy: 18, anchor: 'end', fill: COLOUR.target });
 
   const dashed = { stroke: COLOUR.target, 'stroke-width': 1, 'stroke-dasharray': '3 4' };
   canvas.line([noseX, saddleTopY], [target[0], saddleTopY], dashed);
   canvas.line([target[0], saddleTopY], target, dashed);
 
-  canvas.text([(noseX + target[0]) / 2, saddleTopY], `reach ${whole(target[0] - noseX)}`, {
+  canvas.text([(noseX + target[0]) / 2, saddleTopY], `reach ${whole(target[0] - noseX)} to clamp`, {
     dy: -8,
     anchor: 'middle',
     fill: COLOUR.target,
   });
   canvas.text([target[0], (saddleTopY + target[1]) / 2], `drop ${whole(saddleTopY - target[1])}`, {
     dx: 10,
+    fill: COLOUR.target,
+  });
+
+  // The hoods, at the same height: this model carries a bar's reach but not its drop.
+  const hoods = [target[0] + frame.barReach, target[1]];
+  canvas.line(target, hoods, dashed);
+  canvas.line(hoods, [hoods[0], hoods[1] + 10], dashed);
+  canvas.text(hoods, `hoods ${whole(hoods[0] - noseX)}`, {
+    dx: 6,
+    dy: 18,
     fill: COLOUR.target,
   });
 }
@@ -218,7 +288,10 @@ export function renderSideView() {
   select('#side-view-label').textContent = frame.name + (frame.size ? ' - ' + frame.size : '');
 
   const saddle = saddleSetup(frame);
+  drawMatchCaption(canvas, frame);
+  // As built first, so the solved answer draws over it rather than under it.
+  drawAsBuilt(canvas, frame, state.fitBike.railsBelowSaddleTop);
   drawFrontEnd(canvas, frame, bestStemSolution(frame));
   const saddleOutline = drawSaddle(canvas, frame, saddle);
-  drawBarTarget(canvas, targetBarClamp(frame), saddleOutline);
+  drawBarTarget(canvas, frame, targetBarClamp(frame), saddleOutline);
 }

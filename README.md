@@ -143,6 +143,13 @@ js/ui/reverse-panel.js      section 5, readings per standover position
 `js/lib/*` and `js/model/frame.js` are pure functions of their arguments. Everything else
 in `js/model/` reads the current `state`. Only `js/ui/*` touches the DOM.
 
+The side view draws **two** front ends: the best option out of the catalogue, and — as a
+dashed ghost — what the bike is wearing today. Only the first was drawn originally, which
+reads as a description of the bike rather than a proposal; the gap between the two bar clamps
+is the change being asked for. Its reach figures are to the bar *clamp*, with the hoods drawn
+a bar reach further forward, because that is the number you would compare against a bike you
+have measured.
+
 ## Rendering
 
 The whole page is redrawn on every keystroke. It is a small page, and one code path from
@@ -189,7 +196,7 @@ Names used throughout, in case a term is unfamiliar:
 | `standoverOffset` | How far position A→H moves both horizontal masts, as `[dx, dy]`. 20 mm per letter along an axis leaning 4° back, so mostly up and slightly rearward. |
 | `standoverTravel` | The same movement as a distance along that axis (20 mm per letter) rather than as components. |
 | `slideTilt` | Incline of a near-level slide. 4° here: the mast rises going forward and drops going back. |
-| `matchMode` | `clamp` = same bar on both bikes. `hoods` = correct the target for a different bar reach. |
+| `matchMode` | `clamp` = same bar on both bikes, so the frame's `barReach` goes unused. `hoods` = shift the clamp target by the difference in bar reach, since the hoods are what your hands are on. The side view captions which one is in force, because the target moves between them. |
 
 ## Tests
 
@@ -200,7 +207,7 @@ python3 -m http.server 8000
 # then open http://localhost:8000/tests/
 ```
 
-It runs all three suites and prints a tally (259 checks at the time of writing). Each
+It runs all three suites and prints a tally (266 checks at the time of writing). Each
 suite is also a standalone page if you want to read one in isolation.
 
 | Suite | Covers |

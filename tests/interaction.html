@@ -222,6 +222,36 @@ try {
   note('side view label', $('#side-view-label').textContent);
   check('side view drew something', $('#side-view').children.length > 20, true);
 
+  // The drawing has to say which of the two quantities was matched, because the target ring
+  // moves silently between the modes, and it has to show where the hoods land either way.
+  const drawingText = () => $$('#side-view text').map(t => t.textContent).join(' | ');
+  check('the drawing says the hoods were matched',
+        /matching hood position: bar reach 95 on the fit bike, 75 on this frame, so the clamp target moves \+20\.0mm/
+          .test(drawingText()), true);
+  check('and measures the reach to the hoods as well as to the clamp',
+        /reach [0-9]+ to clamp/.test(drawingText()) && /hoods [0-9]+/.test(drawingText()), true);
+  const reachToClamp = Number(drawingText().match(/reach ([0-9]+) to clamp/)[1]);
+  const reachToHoods = Number(drawingText().match(/hoods ([0-9]+)/)[1]);
+  check('the hood reach is the clamp reach plus that frame\'s own bar reach',
+        reachToHoods - reachToClamp, Number($('[data-path$=".barReach"]').value));
+  pick($('[data-fit-bike="matchMode"]'), 'clamp');
+  check('clamp mode says so instead, and that the bar reach goes unused',
+        /matching bar clamp centre: assumes the same bar on both bikes, so this frame's 75mm bar reach is not used/
+          .test(drawingText()), true);
+  check('and still shows where the hoods end up',
+        /hoods [0-9]+/.test(drawingText()), true);
+  pick($('[data-fit-bike="matchMode"]'), 'hoods');
+
+  // The solved stem is the best option out of the catalogue, not what the bike is wearing.
+  // Both are drawn, or the proposal reads as a description of the bike.
+  check('the drawing shows the build as it stands', /as built [0-9]+ x /.test(drawingText()), true);
+  // The drawing follows the highlighted frame, which need not be the first card.
+  cardButtons('Show in diagram')[0].click();
+  type($('[data-path$=".builtStemLength"]'), '90');
+  type($('[data-path$=".builtSpacerHeight"]'), '35');
+  check('and follows the as-built figures when they change',
+        /as built 90 x [-0-9.]+, 35\.0mm spacers/.test(drawingText()), true);
+
   /* ---- 13. options feed the solver ---- */
   // A stack the fit bike can serve from position A: the handlebar scale only has 70mm of
   // travel, so a tall frame's slammed bar clamp is out of reach without standover rise, and
