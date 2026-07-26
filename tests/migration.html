@@ -96,6 +96,11 @@ try {
   check('as-built rail offset', $('[data-path="b1_abcd.builtRailOffset"]').value, '4');
   check('rail travel', $('[data-path="b1_abcd.railTravel"]').value, '22');
   check('headset stack', $('[data-path="b1_abcd.headsetStack"]').value, '12');
+  // Version 4: maxSpacers 30 was the spacer stack allowed, and the stem's 38mm clamp sits on
+  // the steerer as well, so the measurable exposed length is the two added together.
+  check('spacer limit became an exposed steerer length',
+        $('[data-path="b1_abcd.exposedSteerer"]').value, '68');
+  check('the old field is gone', $('[data-path="b1_abcd.spacersAvailable"]'), null);
   check('seatpost setback', $('[data-path="b1_abcd.seatpostSetback"]').value, '15');
 
   // The calibration reference still points at its frame by id.
@@ -117,8 +122,10 @@ try {
   reading.dispatchEvent(new Event('input', { bubbles: true }));
   await sleep(400);
   const rewritten = JSON.parse(localStorage.getItem('fit-transfer-v2'));
-  check('rewritten at version 3', rewritten.schemaVersion, 3);
+  check('rewritten at version 4', rewritten.schemaVersion, 4);
   check('old keys gone', ['read', 'kk', 'fit', 'opt', 'bikes', 'cal', 'conv'].filter(k => k in rewritten), []);
+  check('and no frame still carries the version 3 spacer field',
+        rewritten.frames.filter(f => 'spacersAvailable' in f), []);
   check('frame ids preserved', rewritten.frames.map(f => f.id), ['b1_abcd', 'b2_efgh']);
   check('reference still linked', rewritten.references[0].frameId, 'b1_abcd');
 
@@ -141,9 +148,39 @@ try {
   // A version 1 save flips the mast angle convention.
   localStorage.setItem('fit-transfer-v2', JSON.stringify({ ...OLD_SAVE, conv: undefined,
     kk: { saddle: { ...OLD_SAVE.kk.saddle, aAngle: 108.5 }, bar: OLD_SAVE.kk.bar } }));
-  const { adoptState, state } = await import('../js/state.js');
+  // Held as the namespace rather than destructured: adoptState *reassigns* the exported
+  // binding, and a destructured copy would still point at the state from before the call.
+  const stateModule = await import('../js/state.js');
+  const { adoptState } = stateModule;
+  const current = () => stateModule.state;
   adoptState(JSON.parse(localStorage.getItem('fit-transfer-v2')));
-  check('v1 mast angle flipped to tube-angle convention', state.carriages.saddle.mastAngle, 71.5);
+  check('v1 mast angle flipped to tube-angle convention', current().carriages.saddle.mastAngle, 71.5);
+
+  // A version 3 save already has the spelled-out names, so it must skip the renaming step and
+  // only have its spacer field converted. Running the rename over it would find none of the
+  // short keys it looks for and quietly hand back a save with nothing in it.
+  adoptState({
+    schemaVersion: 3,
+    readings: { standover: 'E', saddleHeight: 14.1, saddleForeAft: 6.6, barHeight: 8.8, barReach: 3.3 },
+    carriages: { saddle: { zeroX: -111 }, bar: { zeroX: 222 } },
+    fitBike: { crankLength: 165 },
+    frames: [{ id: 'v3frame', name: 'Version 3', stack: 601, stemClampHeight: 35, spacersAvailable: 25 }],
+    references: [{ frameId: 'v3frame', standover: 'D', saddleHeight: 1, saddleForeAft: 2, barHeight: 3, barReach: 4 }],
+    activeFrameId: 'v3frame',
+  });
+  check('v3 readings survive', current().readings.saddleHeight, 14.1);
+  check('v3 standover survives', current().readings.standover, 'E');
+  check('v3 carriage constant survives', current().carriages.bar.zeroX, 222);
+  check('v3 fit bike setting survives', current().fitBike.crankLength, 165);
+  check('v3 frame survives',
+        [current().frames.length, current().frames[0].name, current().frames[0].stack],
+        [1, 'Version 3', 601]);
+  check('v3 spacer limit converted', current().frames[0].exposedSteerer, 60);
+  check('v3 reference survives', current().references[0].frameId, 'v3frame');
+
+  // A frame that never had the field falls back to the default rather than to NaN.
+  adoptState({ schemaVersion: 3, frames: [{ id: 'bare', name: 'Bare' }] });
+  check('a frame with no spacer figure gets the default', current().frames[0].exposedSteerer, 80);
 } catch (error) {
   log.push('THREW ' + (error && error.stack ? error.stack : error));
 }

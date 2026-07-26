@@ -7,7 +7,8 @@
 // and the calibration estimator. These check invariants and round trips rather than
 // hard-coded outputs, so they stay meaningful if a constant changes.
 import { state, adoptState, defaultState } from '../js/state.js';
-import { createFrame, barClampPosition, railClampPosition, steererUp, asBuiltPositions } from '../js/model/frame.js';
+import { createFrame, barClampPosition, railClampPosition, steererUp, asBuiltPositions,
+         spacerRoom, asBuiltOverflowsSteerer } from '../js/model/frame.js';
 import { carriagePosition, carriageReadings, targetPositions, standoverOffsetFor, standoverTravelFor, scaleLimit, readingOnScale } from '../js/model/fit-bike.js';
 import { trainerSetups, lowestStandoverSetup } from '../js/model/reverse.js';
 import { standoverOffset, STANDOVER_POSITIONS } from '../js/model/standover.js';
@@ -77,7 +78,7 @@ log.push('== stem solver');
 reset();
 const frame = createFrame('Round Trip', '56');
 Object.assign(frame, { stack: 570, reach: 385, headTubeAngle: 72.5, seatTubeAngle: 73.5,
-  headsetStack: 15, stemClampHeight: 40, spacersAvailable: 40 });
+  headsetStack: 15, stemClampHeight: 40, exposedSteerer: 80 });
 
 // Build a target that a catalogue stem can reach exactly: 100mm, -6 deg, 25mm of spacers
 // (25 is a whole number of 2.5mm spacers).
@@ -91,6 +92,25 @@ near('recovers the spacer stack', best.spacerHeight, 25, 1e-9);
 near('lands on the target', best.missMm, 0, 1e-9);
 check('and is marked reachable', best.reachable === true);
 check('with no warnings', best.warnings.length === 0);
+
+// The steerer limit is measured as exposed steerer, and the stem's clamp comes out of it.
+// 80mm of steerer less a 40mm clamp leaves 40mm of spacers, which the 25mm answer fits in.
+near('spacer room is the exposed steerer less the stem clamp', spacerRoom(frame), 40, 1e-12);
+frame.exposedSteerer = 60;
+// Not via the best solution: with only 20mm of room the ranking moves on to a combination
+// that does fit, which is the right behaviour but says nothing about the limit. Ask the
+// 100mm/-6 answer itself, the one that needs 25mm.
+const cramped = stemSolutions(frame).find(s => s.stemLength === 100 && s.stemAngle === -6);
+check('a shorter steerer rules that answer out', cramped.reachable === false);
+check('and says what the limit is', cramped.warnings.some(w => /over spacer limit \(20mm\)/.test(w)));
+check('while the ranking falls back to something that fits', bestStemSolution(frame).reachable === true);
+check('as-built 25mm spacers do not fit under a 60mm steerer with a 40mm clamp',
+      asBuiltOverflowsSteerer({ ...frame, builtSpacerHeight: 25 }) === true);
+check('but they do under 80mm',
+      asBuiltOverflowsSteerer({ ...frame, exposedSteerer: 80, builtSpacerHeight: 25 }) === false);
+check('exactly filling the steerer still counts as fitting',
+      asBuiltOverflowsSteerer({ ...frame, exposedSteerer: 65, builtSpacerHeight: 25 }) === false);
+frame.exposedSteerer = 80;
 
 // Every solution's dx/dy must agree with its own miss distance.
 const allAgree = stemSolutions(frame).every(s =>

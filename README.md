@@ -173,9 +173,12 @@ Names used throughout, in case a term is unfamiliar:
 | `headsetStack` | Height of the upper headset cover. Spacers start on top of it, so it shifts the answer by exactly its own height. |
 | `stemClampHeight` | Full height of the stem's steerer clamp. Half sits above the spacers to reach the bar clamp centreline. |
 | `spacerHeight` | The spacer stack under the stem, in mm rather than a count. |
+| `exposedSteerer` | Steerer standing proud of the headset cover — top of the cover to the top of the steerer, which is a length you can put a ruler on. |
+| `spacerRoom` | `exposedSteerer` less `stemClampHeight`: how much spacer is actually left once the stem has taken its share. This is the solver's ceiling. It replaced a stored `spacersAvailable`, which read as though it were measurable and so got filled in with figures smaller than the stack the bike was already wearing — quietly hiding the options that fit. |
+| `asBuiltOverflowsSteerer` | The bike's own build does not fit in its own exposed steerer, so one of the three numbers is wrong. Said out loud on both fields rather than left to show up as missing options. |
 | `exactSpacerHeight` | What the steerer axis wants before rounding to whole spacers. Negative means the front end is already too tall. |
 | `missMm` | Straight-line distance from where the bar clamp lands to where it should be. |
-| `reachable` | The solution needs no negative spacers and no more than the frame has. |
+| `reachable` | The solution needs no negative spacers and no more than `spacerRoom` allows. |
 | `mastMaxReading` / `slideMaxReading` | How far a scale actually goes, in scale units — the top of the seatpost mast's travel, the front column's rise, and the same for the two horizontal slides. **0 means not measured**, and is treated as no upper limit rather than as a zero-length scale. |
 | `needsNegativeSpacers` | The bar would have to sit below the frame's own slammed height. Not a build, so the stem table leaves these out entirely rather than printing a negative spacer stack. If a frame has nothing left, the card says how far above the target its closest option still sits. The model keeps them — the ranking already sorts them last — so only the display filters. |
 | `railClamp` | Centre of the saddle rail clamp — what the fit bike's saddle carriage actually locates. |
@@ -196,14 +199,14 @@ python3 -m http.server 8000
 # then open http://localhost:8000/tests/
 ```
 
-It runs all three suites and prints a tally (253 checks at the time of writing). Each
+It runs all three suites and prints a tally (271 checks at the time of writing). Each
 suite is also a standalone page if you want to read one in isolation.
 
 | Suite | Covers |
 | --- | --- |
 | `tests/model.html` | The maths, no DOM: standover as a vector, the stem solver hitting a reachable target exactly, saddle round trips, crank and bar-reach compensation, the calibration check reporting zero miss on true constants and a real one on wrong constants, and the reverse solve inverting the forward one at all eight standover positions. |
 | `tests/interaction.html` | The real UI, driven: typing, the caret surviving a redraw, add/remove/duplicate frames, pasting a geometry table, checking the constants against two references, resetting them to the measured defaults, reset all, and applying a reverse setup. |
-| `tests/migration.html` | Loads a save written by the previous single-file version and checks every field survives the rename, ids and references included. |
+| `tests/migration.html` | Loads a save written by the previous single-file version and checks every field survives the rename, ids and references included. Also that a version 3 save skips the rename step and only has its spacer field converted — the migration applies one version's change at a time, and running the rename over an already-renamed save finds none of the keys it looks for and hands back an empty one. |
 
 The suites run **one at a time**, and the runner tears each frame down before starting the
 next. Two of them own `localStorage`, and a suite publishes its results before its app's

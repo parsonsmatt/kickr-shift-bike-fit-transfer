@@ -20,8 +20,9 @@ import { normaliseStandover } from './model/standover.js';
  *   1  original
  *   2  mast angles switched to the tube-angle convention (73 leans back, 90 vertical)
  *   3  every field renamed to a spelled-out name
+ *   4  frames store exposedSteerer (a measurable length) rather than spacersAvailable
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export function defaultState() {
   return {
@@ -137,11 +138,11 @@ const OPTION_NAMES = {
 
 const FRAME_NAMES = {
   hta: 'headTubeAngle',
+  maxSpacers: 'spacersAvailable', // renamed again at version 4, below
   sta: 'seatTubeAngle',
   seatTube: 'seatTubeLength',
   headset: 'headsetStack',
   stemStack: 'stemClampHeight',
-  maxSpacers: 'spacersAvailable',
   crank: 'crankLength',
   postSetback: 'seatpostSetback',
   railRange: 'railTravel',
@@ -158,11 +159,8 @@ const REFERENCE_NAMES = { bikeId: 'frameId', ...READING_NAMES };
 const renameKeys = (object = {}, names) =>
   Object.fromEntries(Object.entries(object || {}).map(([key, value]) => [names[key] || key, value]));
 
-/** Rewrites a save from any earlier version into the current field names. */
-function migrate(saved) {
-  const version = Number(saved.schemaVersion ?? saved.conv ?? 1);
-  if (version >= SCHEMA_VERSION) return saved;
-
+/** Version 1 and 2 used short field names throughout. Rewrites them to the spelled-out ones. */
+function renameEverything(saved, version) {
   const carriages = {
     saddle: renameKeys(saved.kk?.saddle, CARRIAGE_NAMES),
     bar: renameKeys(saved.kk?.bar, CARRIAGE_NAMES),
@@ -177,7 +175,6 @@ function migrate(saved) {
   }
 
   return {
-    schemaVersion: SCHEMA_VERSION,
     readings: renameKeys(saved.read, READING_NAMES),
     carriages,
     fitBike: renameKeys(saved.fit, FIT_BIKE_NAMES),
@@ -186,6 +183,36 @@ function migrate(saved) {
     references: (saved.cal || []).map(reference => renameKeys(reference, REFERENCE_NAMES)),
     activeFrameId: saved.activeId ?? null,
   };
+}
+
+/**
+ * Version 4: a frame stored the spacer stack it would allow, which is not a thing you can
+ * measure. It now stores the exposed steerer instead, and the stem's clamp height comes off
+ * that. Adding the clamp height back on keeps every existing frame behaving identically.
+ */
+function useExposedSteerer(saved) {
+  const fallbackClamp = createFrame().stemClampHeight;
+
+  return {
+    ...saved,
+    frames: (saved.frames || []).map(frame => {
+      if (!Number.isFinite(frame.spacersAvailable)) return frame;
+      const { spacersAvailable, ...rest } = frame;
+      const clamp = Number.isFinite(frame.stemClampHeight) ? frame.stemClampHeight : fallbackClamp;
+      return { ...rest, exposedSteerer: spacersAvailable + clamp };
+    }),
+  };
+}
+
+/** Rewrites a save from any earlier version into the current shape, one version at a time. */
+function migrate(saved) {
+  const version = Number(saved.schemaVersion ?? saved.conv ?? 1);
+  if (version >= SCHEMA_VERSION) return saved;
+
+  let current = saved;
+  if (version < 3) current = renameEverything(current, version);
+  if (version < 4) current = useExposedSteerer(current);
+  return { ...current, schemaVersion: SCHEMA_VERSION };
 }
 
 /**

@@ -5,7 +5,7 @@ import { DEGREES, dot, distanceBetween } from '../lib/vector.js';
 import { oneDecimal, whole, parseNumberList } from '../lib/format.js';
 import { state } from '../state.js';
 import { targetPositions } from './fit-bike.js';
-import { barClampPosition, steererUp } from './frame.js';
+import { barClampPosition, steererUp, spacerRoom } from './frame.js';
 
 /**
  * Where this frame's bar clamp needs to end up.
@@ -89,8 +89,8 @@ export function stemSolutions(frame) {
 
       if (needsNegativeSpacers(fit))
         warnings.push(`front end too tall - needs ${oneDecimal(-fit.exactSpacerHeight)}mm below zero`);
-      if (fit.spacerHeight > frame.spacersAvailable + 1e-9)
-        warnings.push(`over spacer limit (${whole(frame.spacersAvailable)}mm)`);
+      if (fit.spacerHeight > spacerRoom(frame) + 1e-9)
+        warnings.push(`over spacer limit (${whole(spacerRoom(frame))}mm)`);
       if (stemLength < options.minStemLength)
         warnings.push(`stem under ${whole(options.minStemLength)}mm`);
       if (stemLength > options.maxStemLength)
@@ -103,7 +103,7 @@ export function stemSolutions(frame) {
         stemLength,
         stemAngle,
         warnings,
-        reachable: !needsNegativeSpacers(fit) && fit.spacerHeight <= frame.spacersAvailable + 1e-9,
+        reachable: !needsNegativeSpacers(fit) && fit.spacerHeight <= spacerRoom(frame) + 1e-9,
       });
     }
   }

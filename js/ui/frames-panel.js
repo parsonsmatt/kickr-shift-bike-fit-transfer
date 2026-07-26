@@ -4,7 +4,7 @@
 import { select, element, clearChildren } from '../lib/dom.js';
 import { oneDecimal, whole, signedOneDecimal } from '../lib/format.js';
 import { state } from '../state.js';
-import { createFrame, newFrameId } from '../model/frame.js';
+import { createFrame, newFrameId, spacerRoom, asBuiltOverflowsSteerer } from '../model/frame.js';
 import { normaliseStandover } from '../model/standover.js';
 import { stemSolutions, saddleSetup, isMatch, needsNegativeSpacers } from '../model/solver.js';
 import { numberField, textField, readoutCell, chip, table } from './fields.js';
@@ -30,6 +30,31 @@ function crankHint(frame) {
     'extension. Setting the fit bike to these cranks removes the correction. Note the bar ' +
     'target does not move, so the saddle-to-bar drop changes by the same amount.'
   );
+}
+
+/**
+ * Exposed steerer is what you can measure with a ruler; the spacer stack it allows is what
+ * the solver needs. Spell out the subtraction rather than leaving the user to wonder whether
+ * the stem counts, and say so plainly when the bike's own build does not fit inside it.
+ */
+function steererHint(frame) {
+  const room = spacerRoom(frame);
+  const measured =
+    `Top of the headset cover to the top of the steerer. The stem sits in this too, so its ` +
+    `${oneDecimal(frame.stemClampHeight)}mm clamp comes off: ${oneDecimal(room)}mm of spacers.`;
+
+  if (asBuiltOverflowsSteerer(frame))
+    return (
+      measured +
+      ` That is less than the ${oneDecimal(frame.builtSpacerHeight)}mm this bike is already ` +
+      'built with, so one of the three numbers is wrong - and until it is fixed, options that ' +
+      'would actually fit are being hidden.'
+    );
+
+  if (room < 0)
+    return measured + ' A negative figure means the stem alone will not fit on the steerer.';
+
+  return measured;
 }
 
 /** "100mm x -6.0 deg | 20.0mm spacers | match 1.2mm" — the one-line answer per frame. */
@@ -75,7 +100,7 @@ function geometryFields(frame, onChange, onNameChange) {
       {},
       frameField(frame, 'headsetStack', 'Headset stack above head tube (mm)', 'Height of the upper cover. Check the manual.', onChange),
       frameField(frame, 'stemClampHeight', 'Stem clamp height (mm)', 'Half of this sits above the spacers.', onChange),
-      frameField(frame, 'spacersAvailable', 'Spacers available (mm)', null, onChange),
+      frameField(frame, 'exposedSteerer', 'Exposed steerer above headset (mm)', steererHint(frame), onChange),
     ),
     element(
       'div',
@@ -200,7 +225,12 @@ function asBuiltSection(frame, onChange) {
       element(
         'div',
         {},
-        frameField(frame, 'builtSpacerHeight', 'Spacers below the stem (mm)', null, onChange),
+        frameField(frame, 'builtSpacerHeight', 'Spacers below the stem (mm)',
+          asBuiltOverflowsSteerer(frame)
+            ? `This plus the ${oneDecimal(frame.stemClampHeight)}mm stem clamp is more steerer than ` +
+              `the ${oneDecimal(frame.exposedSteerer)}mm entered above.`
+            : null,
+          onChange),
         frameField(frame, 'builtRailOffset', 'Saddle back from rail centre (mm)', null, onChange),
       ),
       element(

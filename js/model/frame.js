@@ -32,7 +32,7 @@ export function createFrame(name = 'New frame', size = '', crankLength = 170) {
     headsetStack: 15, // upper headset cover height, spacers start on top of it
     stemClampHeight: 40, // full height of the stem's steerer clamp
     barReach: 75, // bar's own reach, only used in hood-match mode
-    spacersAvailable: 40, // how much steerer there is to stack spacers on
+    exposedSteerer: 80, // steerer standing above the headset cover: spacers AND the stem
     crankLength,
     seatpostSetback: 0,
     railTravel: 25, // how far the saddle can slide either way from rail centre
@@ -47,6 +47,23 @@ export function createFrame(name = 'New frame', size = '', crankLength = 170) {
     expanded: true,
   };
 }
+
+/**
+ * How much spacer the steerer will actually take. The stem has to sit on the steerer too,
+ * so it eats its own clamp height out of the exposed length.
+ *
+ * This used to be stored directly, as "spacers available", which read as though it were
+ * something you could measure - so it got filled in with numbers smaller than the spacer
+ * stack the bike was already wearing. Exposed steerer is a length you can put a ruler on.
+ */
+export const spacerRoom = frame => frame.exposedSteerer - frame.stemClampHeight;
+
+/**
+ * True when the bike's own build does not fit in its own exposed steerer, which means one of
+ * the three numbers is wrong rather than that the bike is impossible.
+ */
+export const asBuiltOverflowsSteerer = frame =>
+  frame.builtSpacerHeight + frame.stemClampHeight > frame.exposedSteerer + 1e-9;
 
 /** Unit vector pointing up the steerer, given a head tube angle read the usual way. */
 export const steererUp = headTubeAngle => [

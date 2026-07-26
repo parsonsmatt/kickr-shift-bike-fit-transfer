@@ -114,7 +114,7 @@ try {
   /* ---- 3. state is persisted, in the new schema ---- */
   await sleep(400);
   const saved = JSON.parse(localStorage.getItem('fit-transfer-v2'));
-  check('saved schemaVersion', saved.schemaVersion, 3);
+  check('saved schemaVersion', saved.schemaVersion, 4);
   check('saved reading', saved.readings.saddleHeight, 18.5);
   check('saved uses new frame field names', 'headTubeAngle' in saved.frames[0], true);
   check('save status says saved', /^saved \|/.test($('#save-status').textContent), true);
