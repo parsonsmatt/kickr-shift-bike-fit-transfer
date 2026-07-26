@@ -16,6 +16,15 @@ export function rememberFocus(path, event) {
   };
 }
 
+/**
+ * Drop the remembered text. Anything that replaces the state wholesale - import, reset all,
+ * reset the constants - has to call this, or the last thing typed gets written back over the
+ * value the reset just put there.
+ */
+export function forgetFocus() {
+  focusedField = null;
+}
+
 export function restoreFocus() {
   if (!focusedField) return;
 

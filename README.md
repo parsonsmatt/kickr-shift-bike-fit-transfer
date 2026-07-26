@@ -49,15 +49,22 @@ vertical rise.
 The measured constants for this bike are the defaults in `js/state.js`, derived from
 `constants.txt` (floor measurements less the 260 mm floor-to-BB height).
 
-Those constants are the hard part to measure, so section 2 back-solves them instead: set
-the fit bike up to match a bike you already know, note the readings, and a least-squares
-fit recovers them. One reference pins the zero points; two or more also fit the
-mm-per-unit.
+Every constant is editable, but **an end user should never need to touch one**. They
+describe the machine, not the rider, and if one is wrong that means it was mismeasured here —
+so the constants panel offers "Reset to measured defaults" rather than any way to derive
+them. Section 2 is a **sanity check only**: set the fit bike up to match a bike you already
+know, note the readings, and it reports how far the constants miss that bike.
+
+There used to be a least-squares fit in section 2 that solved the constants from those
+references and wrote them back. It was removed. Solving means trusting the references more
+than the tape measure, and one reference with a reading left at zero was enough to quietly
+move a carriage's zero point onto that bike — which is exactly what happened: it landed the
+bar zero on a reference frame's bar clamp, after which section 6 reported bar readings of
+0.0 that were perfectly self-consistent and completely wrong.
 
 "Use as calibration reference" captures whatever section 1 currently says — that is the
 point of the button. One reference per frame, and pressing it again re-captures rather than
 doing nothing, since a button that silently no-ops is indistinguishable from a broken one.
-The same rule applies to "Undo solve", which now says when there is nothing to undo.
 
 ## Three directions
 
@@ -66,7 +73,7 @@ The same model runs three ways, which is worth keeping straight:
 | | From | To | Where |
 | --- | --- | --- | --- |
 | forward | readings | stem, angle, spacers on a frame | sections 1, 3, 5 |
-| constants | a known bike + its readings | the fit bike's own constants | section 2 |
+| check | a known bike + its readings | how far the constants miss it | section 2 |
 | reverse | a bike you already ride | the readings to dial into the fit bike | section 6 |
 
 The reverse direction is the exact inverse of the carriage model rather than a fit: two
@@ -115,7 +122,7 @@ js/model/standover.js       standover positions A-H and the rise axis
 js/model/fit-bike.js        the carriage model: readings to target positions
 js/model/frame.js           a candidate frame, and its bar/saddle geometry (pure)
 js/model/solver.js          stem length, angle and spacers that hit the target
-js/model/calibration.js     back-solving the fit bike constants
+js/model/calibration.js     checking the constants against a bike you know
 js/model/reverse.js         the other way round: a real bike back to fit bike readings
 js/model/geometry-table.js  parsing a pasted manufacturer geometry table
 
@@ -151,6 +158,10 @@ against a stable key, since the element itself is a new one every time:
   disclosures built in JavaScript — the ones written directly into `index.html` are never
   rebuilt, so they keep their own state for free.
 
+Remembering the raw text has one sharp edge: anything that replaces the state wholesale —
+import, reset all, reset the constants — has to call `forgetFocus()` first, or the redraw
+writes the last thing typed straight back over the value the reset just restored.
+
 ## Glossary
 
 Names used throughout, in case a term is unfamiliar:
@@ -185,13 +196,13 @@ python3 -m http.server 8000
 # then open http://localhost:8000/tests/
 ```
 
-It runs all three suites and prints a tally (254 checks at the time of writing). Each
+It runs all three suites and prints a tally (253 checks at the time of writing). Each
 suite is also a standalone page if you want to read one in isolation.
 
 | Suite | Covers |
 | --- | --- |
-| `tests/model.html` | The maths, no DOM: standover as a vector, the stem solver hitting a reachable target exactly, saddle round trips, crank and bar-reach compensation, the calibration estimator recovering known constants, and the reverse solve inverting the forward one at all eight standover positions. |
-| `tests/interaction.html` | The real UI, driven: typing, the caret surviving a redraw, add/remove/duplicate frames, pasting a geometry table, check/solve/undo calibration, reset, and applying a reverse setup. |
+| `tests/model.html` | The maths, no DOM: standover as a vector, the stem solver hitting a reachable target exactly, saddle round trips, crank and bar-reach compensation, the calibration check reporting zero miss on true constants and a real one on wrong constants, and the reverse solve inverting the forward one at all eight standover positions. |
+| `tests/interaction.html` | The real UI, driven: typing, the caret surviving a redraw, add/remove/duplicate frames, pasting a geometry table, checking the constants against two references, resetting them to the measured defaults, reset all, and applying a reverse setup. |
 | `tests/migration.html` | Loads a save written by the previous single-file version and checks every field survives the rename, ids and references included. |
 
 The suites run **one at a time**, and the runner tears each frame down before starting the

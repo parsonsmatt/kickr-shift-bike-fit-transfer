@@ -93,8 +93,14 @@
         &minus;3 drops 3&deg;. Which way along a slide a bigger reading travels is carried by the sign
         of its mm-per-unit, so use a negative gain if the scale counts the other way. Every field
         prints back what it means in words &mdash; if that sentence disagrees with the bike in front
-        of you, the number is wrong. The values below are measured off the bike; section 2 can
-        re-solve them from a bike you already know.
+        of you, the number is wrong.
+      </div>
+      <div class="note" style="margin:0 0 12px">
+        <b>These are measured off the machine and you should not normally need to touch them.</b>
+        They are a property of the fit bike, not of you or your bikes, so they do not change when you
+        adjust anything. Editing one only makes sense if a measurement here is actually wrong &mdash;
+        section 2 will tell you whether it is, by checking these numbers against a bike you already
+        know. Reset puts every value on this panel back to the measured defaults.
       </div>
       <div class="grid cols2">
         <div><h3>Saddle carriage</h3><div class="grid cols2" style="gap:0 12px" id="saddle-carriage-fields"></div></div>
@@ -109,6 +115,10 @@
           <input type="text" inputmode="decimal" data-fit-bike="standoverRiseBackDegrees">
           <div class="hint" data-hint-for="standoverRise"></div></div>
       </div>
+      <div class="btnrow" style="margin-top:12px">
+        <button class="ghost tiny" id="reset-constants">Reset constants to measured defaults</button>
+        <span class="status" id="reset-constants-note"></span>
+      </div>
     </details>
   </div>
 
@@ -117,18 +127,19 @@
 </section>
 
 <section>
-  <h2>2 &mdash; Calibrate from a bike you already know</h2>
+  <h2>2 &mdash; Check the constants against a bike you already know</h2>
   <div class="panel">
     <div class="note" style="margin-bottom:10px">
-      Rather than measuring the fit bike, set it up to match a bike whose build you know and note the standover position and scale
-      readings. The app works out where those two points sit from that frame's geometry and its actual stem,
-      spacers and seatpost, then back-solves the constants above. One reference fixes the zero positions.
-      Two or more also fit the travel per unit and report how well everything agrees.
+      A sanity check on the fit bike constants, and nothing more &mdash; it never changes them. Set the fit
+      bike up to match a bike whose build you know, note the standover position and the four scale readings,
+      and fill in that frame's <i>as currently built</i> figures in section 3. The app works out where its bar
+      clamp and rail clamp really are from its geometry and its actual stem, spacers and seatpost, then reports
+      how far the constants miss. Agreement means the constants are right. A large miss means one of three
+      things is wrong: a constant, that frame's as-built figures, or the readings.
     </div>
     <div class="scroll"><table id="reference-table"></table></div>
     <div class="btnrow" style="margin-top:10px">
-      <button class="ghost" id="check-constants">Check current constants</button>
-      <button id="solve-constants">Solve constants &mdash; overwrites</button>
+      <button id="check-constants">Check current constants</button>
       <span class="status" id="reference-note"></span>
     </div>
     <div id="calibration-result" style="margin-top:10px"></div>

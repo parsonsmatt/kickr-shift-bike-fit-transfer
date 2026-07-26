@@ -7,6 +7,7 @@ import { bindStaticInputs, syncStaticInputs } from './ui/fit-bike-panel.js';
 import { bindCalibrationButtons } from './ui/calibration-panel.js';
 import { bindFrameButtons } from './ui/frames-panel.js';
 import { bindPastePanel } from './ui/paste-panel.js';
+import { forgetFocus } from './ui/focus.js';
 import { render, refresh } from './ui/render.js';
 
 const EXPORT_FILENAME = 'fit-transfer.json';
@@ -36,6 +37,7 @@ function bindFileButtons() {
         alert('That file did not parse as fit-transfer JSON.');
         return;
       }
+      forgetFocus();
       syncStaticInputs();
       refresh();
     };
@@ -45,6 +47,7 @@ function bindFileButtons() {
   select('#reset-all').onclick = () => {
     if (!confirm('Clear everything?')) return;
     resetState();
+    forgetFocus();
     syncStaticInputs();
     refresh();
   };

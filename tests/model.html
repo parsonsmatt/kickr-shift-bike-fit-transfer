@@ -12,7 +12,7 @@ import { carriagePosition, carriageReadings, targetPositions, standoverOffsetFor
 import { trainerSetups, lowestStandoverSetup } from '../js/model/reverse.js';
 import { standoverOffset, STANDOVER_POSITIONS } from '../js/model/standover.js';
 import { stemSolutions, bestStemSolution, saddleSetup, targetBarClamp, targetRailClamp, fitSpacerHeight, needsNegativeSpacers } from '../js/model/solver.js';
-import { fitCarriage, residuals, worstResidual, solveConstants, referenceObservations } from '../js/model/calibration.js';
+import { residuals, worstResidual, checkConstants, referenceObservations } from '../js/model/calibration.js';
 
 const log = [];
 let failures = 0;
@@ -205,30 +205,22 @@ const observations = SAMPLES.map(sample => {
   return { mastReading: sample.mast, slideReading: sample.slide, standoverOffset: offset,
            position: carriagePosition(TRUTH, sample.mast, sample.slide, offset) };
 });
-// The solver starts from constants that are wrong on every count except the fixed angles.
-const wrongStart = { ...TRUTH, zeroX: 0, zeroY: 0, mastMmPerUnit: 1, slideMmPerUnit: 1 };
-
-const fromTwo = fitCarriage(observations.slice(0, 2), wrongStart, { fitTravel: true });
-for (const field of ['zeroX', 'zeroY', 'mastMmPerUnit', 'slideMmPerUnit']) {
-  near(`two references recover ${field}`, fromTwo[field], TRUTH[field], 1e-6);
-}
-const fromThree = fitCarriage(observations, wrongStart, { fitTravel: true });
-for (const field of ['zeroX', 'zeroY', 'mastMmPerUnit', 'slideMmPerUnit']) {
-  near(`three references recover ${field}`, fromThree[field], TRUTH[field], 1e-6);
-}
-
-const zeroOnly = fitCarriage(observations, TRUTH, { fitTravel: false });
-near('holding the travel still recovers zeroX', zeroOnly.zeroX, TRUTH.zeroX, 1e-6);
-near('holding the travel still recovers zeroY', zeroOnly.zeroY, TRUTH.zeroY, 1e-6);
-near('and leaves the travel exactly as entered', zeroOnly.mastMmPerUnit, TRUTH.mastMmPerUnit);
-
-// Residual of the recovered constants against the observations must be ~0 ...
+// Section 2 only ever reads. Given the true constants, every observation must come back
+// with no residual at all.
 state.carriages.saddle = { ...TRUTH };
 state.carriages.bar = { ...TRUTH };
 const asPairs = observations.map(o => ({ name: 'sample', saddle: o, bar: o }));
-near('recovered constants reproduce every observation', worstResidual(residuals(asPairs)), 0, 1e-9);
+near('the true constants reproduce every observation', worstResidual(residuals(asPairs)), 0, 1e-9);
 
-// ... and a wrong lean angle must SHOW UP as a residual rather than be absorbed.
+// And a wrong constant has to show up, at its own size — that is the whole value of the check.
+state.carriages.bar = { ...TRUTH, zeroX: TRUTH.zeroX + 12 };
+near('a zero point out by 12mm reads as a 12mm miss', worstResidual(residuals(asPairs)), 12, 1e-9);
+state.carriages.bar = { ...TRUTH, mastMmPerUnit: TRUTH.mastMmPerUnit + 1 };
+check('travel per unit being wrong also shows up', worstResidual(residuals(asPairs)) > 10);
+note('worst residual with mm-per-unit out by 1', worstResidual(residuals(asPairs)).toFixed(1) + 'mm');
+state.carriages.bar = { ...TRUTH };
+
+// A wrong lean angle must SHOW UP as a residual rather than be absorbed anywhere.
 state.fitBike.standoverRiseBackDegrees = 0;
 const reoffset = asPairs.map((pair, i) => {
   const offset = standoverOffsetFor(SAMPLES[i].letter);
@@ -241,12 +233,13 @@ near('and that residual is the A-to-H setback', leanResidual, 9.77, 0.01);
 note('worst residual with the lean wrongly set to 0', leanResidual.toFixed(2) + 'mm');
 state.fitBike.standoverRiseBackDegrees = 4;
 
-// Degenerate input: two references in the same place cannot separate the two slides.
-const identical = [observations[0], { ...observations[0] }];
-check('identical references are reported as singular, not fitted',
-  fitCarriage(identical, wrongStart, { fitTravel: true }) === null);
+// With nothing to check against, say so rather than reporting a vacuous pass.
+reset();
+state.references = [];
+const noRefs = checkConstants();
+check('checking with no references refuses', noRefs.ok === false);
+check('and says what to do about it', /Add at least one reference/.test(noRefs.message));
 
-// And that surfaces as a readable failure through solveConstants().
 reset();
 const twinA = createFrame('Twin A');
 const twinB = createFrame('Twin B');
@@ -255,10 +248,9 @@ state.references = [
   { frameId: twinA.id, standover: 'A', saddleHeight: 15, saddleForeAft: 7, barHeight: 9, barReach: 4 },
   { frameId: twinB.id, standover: 'A', saddleHeight: 15, saddleForeAft: 7, barHeight: 9, barReach: 4 },
 ];
-const singular = solveConstants();
-check('solveConstants refuses rather than returning nonsense', singular.ok === false);
-check('and says which carriage and why', /too alike to/.test(singular.message));
-note('message', singular.message.slice(0, 80));
+const twoRefs = checkConstants();
+check('two references check without complaint', twoRefs.ok === true);
+check('and both are reported on', twoRefs.residuals.length === 2);
 
 // A reference pointing at a deleted frame is dropped, not crashed on.
 state.references.push({ frameId: 'does-not-exist', standover: 'A', saddleHeight: 1, saddleForeAft: 1, barHeight: 1, barReach: 1 });

@@ -222,7 +222,17 @@ export function resetState() {
   state = defaultState();
 }
 
-/** Used by the calibration panel to put the constants back after an unwanted solve. */
-export function replaceCarriages(carriages) {
-  state.carriages = carriages;
+/**
+ * Put everything in the fit bike constants panel back to the measured defaults: both
+ * carriages and the standover mechanism. Nothing else on the page is touched, so the frames,
+ * readings and current setup survive.
+ */
+export function resetConstants() {
+  const base = defaultState();
+  state.carriages = base.carriages;
+  state.fitBike = {
+    ...state.fitBike,
+    standoverStepMm: base.fitBike.standoverStepMm,
+    standoverRiseBackDegrees: base.fitBike.standoverRiseBackDegrees,
+  };
 }

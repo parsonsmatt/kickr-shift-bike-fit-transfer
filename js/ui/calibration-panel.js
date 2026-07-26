@@ -1,11 +1,14 @@
-// Section 2: the table of calibration references, and the check / solve buttons.
+// Section 2: the table of known bikes to check the constants against, and the check button.
+//
+// Read-only by design. There is deliberately no button that solves the constants from these
+// references and writes them back - see the note at the top of model/calibration.js.
 
 import { select, element, clearChildren } from '../lib/dom.js';
 import { oneDecimal, signedOneDecimal, toNumber } from '../lib/format.js';
-import { state } from '../state.js';
+import { state, resetConstants } from '../state.js';
 import { STANDOVER_POSITIONS, normaliseStandover } from '../model/standover.js';
-import { checkConstants, solveConstants, undoSolve, worstResidual } from '../model/calibration.js';
-import { rememberFocus } from './focus.js';
+import { checkConstants, worstResidual } from '../model/calibration.js';
+import { rememberFocus, forgetFocus } from './focus.js';
 import { table, tableHead, tableBody } from './fields.js';
 import { standoverOptionLabel } from './fit-bike-panel.js';
 
@@ -100,12 +103,9 @@ export function renderReferenceTable(onChange) {
   const headings = ['Reference bike', 'Standover', ...READING_COLUMNS.map(column => column.heading), ''];
   host.append(tableHead(headings), tableBody(rows));
 
-  select('#reference-note').textContent =
-    state.references.length >= 2
-      ? 'will fit zero points and travel per unit'
-      : state.references.length === 1
-        ? 'will fit zero points only - add a second bike to fit travel too'
-        : '';
+  select('#reference-note').textContent = state.references.length
+    ? `checking against ${state.references.length === 1 ? 'one bike' : state.references.length + ' bikes'}`
+    : '';
 }
 
 /** How far the current constants miss each reference, per carriage and axis. */
@@ -125,26 +125,7 @@ function residualTable(residualList) {
   return element('div', { class: 'scroll' }, table(headings, rows, { style: 'margin-top:8px' }));
 }
 
-/** Before / after for every constant the solve actually moved. */
-function changeTable(changed) {
-  const rows = changed.map(change =>
-    element(
-      'tr',
-      {},
-      element('td', {}, `${change.carriage} ${change.field}`),
-      element('td', {}, oneDecimal(change.before)),
-      element('td', {}, oneDecimal(change.after)),
-      element('td', {}, signedOneDecimal(change.after - change.before)),
-    ),
-  );
-  return element(
-    'div',
-    { class: 'scroll' },
-    table(['Constant', 'Was', 'Now', 'Change'], rows, { style: 'margin-top:8px' }),
-  );
-}
-
-const referenceCountPhrase = count => (count > 1 ? `${count} references` : 'the reference');
+const referenceCountPhrase = count => (count > 1 ? `all ${count} reference bikes` : 'the reference bike');
 
 export function bindCalibrationButtons(onChange) {
   const output = () => clearChildren(select('#calibration-result'));
@@ -164,79 +145,27 @@ export function bindCalibrationButtons(onChange) {
         'div',
         { class: agrees ? 'okbox' : 'warnbox' },
         agrees
-          ? `The constants you entered already predict ${result.referenceCount > 1 ? `all ${result.referenceCount} references` : 'the reference'} to within ${oneDecimal(worst)}mm. Nothing to solve.`
-          : `The constants you entered are out by up to ${oneDecimal(worst)}mm against ${referenceCountPhrase(result.referenceCount)}. Check the slide directions, or solve.`,
+          ? `The constants predict ${referenceCountPhrase(result.referenceCount)} to within ${oneDecimal(worst)}mm. They are right.`
+          : `The constants are out by up to ${oneDecimal(worst)}mm against ${referenceCountPhrase(result.referenceCount)}. ` +
+            'One of three things is wrong, in rough order of likelihood: that bike\'s "as currently built" ' +
+            'figures, the readings in the row above, or a constant below. The per-axis misses show which ' +
+            'carriage is off - check its slide directions read true before touching a number.',
       ),
       residualTable(result.residuals),
     );
     select('#constants-details').open = true;
   };
 
-  select('#solve-constants').onclick = () => {
-    const alsoTravel = state.references.length > 1 ? ' and travel per unit' : '';
+  select('#reset-constants').onclick = () => {
     const confirmed = confirm(
-      `This replaces the zero points${alsoTravel} in the constants panel with fitted values. ` +
-        'You can undo it afterwards. Continue?',
+      'Put both carriages and the standover mechanism back to the measured defaults? ' +
+        'Your frames, readings and current setup are not affected.',
     );
     if (!confirmed) return;
-
-    const result = solveConstants();
-    const host = output();
-    if (!result.ok) {
-      host.append(element('div', { class: 'warnbox' }, result.message));
-      return;
-    }
-
-    const worst = worstResidual(result.residuals);
-    host.append(
-      element(
-        'div',
-        { class: worst <= AGREEMENT_MM ? 'okbox' : 'warnbox' },
-        result.zeroPointsOnly
-          ? 'Zero points solved from one reference. Travel per unit was left as entered - add a second reference to fit it too.'
-          : `Zero points and travel per unit solved from ${result.referenceCount} references. Largest disagreement ${oneDecimal(worst)}mm.`,
-      ),
-    );
-
-    host.append(
-      result.changed.length
-        ? changeTable(result.changed)
-        : element(
-            'div',
-            { class: 'note', style: 'margin-top:8px' },
-            'Nothing moved by more than 0.05mm - your constants were already right.',
-          ),
-    );
-
-    if (!result.zeroPointsOnly) host.append(residualTable(result.residuals));
-
-    host.append(
-      element(
-        'div',
-        { class: 'btnrow', style: 'margin-top:10px' },
-        element(
-          'button',
-          {
-            class: 'ghost tiny',
-            onclick: () => {
-              // Same rule as the reference button: never fail silently, or the button looks dead.
-              const host = clearChildren(select('#calibration-result'));
-              if (!undoSolve()) {
-                host.append(
-                  element('div', { class: 'warnbox' }, 'Nothing to undo - no solve has been applied.'),
-                );
-                return;
-              }
-              host.append(element('div', { class: 'okbox' }, 'Constants put back the way you had them.'));
-              onChange();
-            },
-          },
-          'Undo solve',
-        ),
-      ),
-    );
-
-    select('#constants-details').open = true;
+    resetConstants();
+    forgetFocus();
     onChange();
+    // After onChange, which is the redraw that would otherwise wipe this.
+    select('#reset-constants-note').textContent = 'back to the measured defaults';
   };
 }

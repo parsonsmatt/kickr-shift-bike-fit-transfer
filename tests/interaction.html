@@ -178,7 +178,7 @@ try {
   check('imported size name', pastedRow && pastedRow.children[1].textContent, '56');
   check('paste panel closed', $('#paste-panel').style.display, 'none');
 
-  /* ---- 9. calibrate: check, then solve, then undo ---- */
+  /* ---- 9. calibrate: capture a reference, then check against it ---- */
   const cardButtons = label => $$('#frame-list button').filter(b => b.textContent.trim() === label);
   // The button has to capture what section 1 currently says. It used to take the standover
   // position and leave the four readings at zero.
@@ -186,7 +186,7 @@ try {
     .map(key => $(`[data-reading="${key}"]`).value);
   cardButtons('Use as calibration reference')[0].click();
   check('one reference row', $('#reference-table tbody').children.length, 1);
-  check('reference note', /zero points only/.test($('#reference-note').textContent), true);
+  check('reference note', /checking against one bike/.test($('#reference-note').textContent), true);
   check('the note says what it just did', /Added .* from the readings now entered/.test($('#reference-note').textContent), true);
   check('the readings entered were captured, not zeroed',
         $$('#reference-table tbody input').map(i => Number(i.value)), currentReadings.map(Number));
@@ -213,30 +213,38 @@ try {
   note('check says', $('#calibration-result div').textContent.slice(0, 70));
   check('constants panel opened', $('#constants-details').open, true);
 
+  // Section 2 is read-only. It must never move a constant, and there must be no button that does.
   const zeroXBefore = Number($('[data-path="carriages.saddle.zeroX"]').value);
-  window.confirm = () => true;
-  $('#solve-constants').click();
-  const zeroXAfter = Number($('[data-path="carriages.saddle.zeroX"]').value);
-  check('solve moved the saddle zero point', zeroXBefore !== zeroXAfter, true);
-  note('saddle zeroX', [zeroXBefore, zeroXAfter]);
-  check('change table listed constants', $('#calibration-result table') ? $('#calibration-result tbody').children.length > 0 : false, true);
+  check('checking left the constants alone',
+        Number($('[data-path="carriages.saddle.zeroX"]').value), zeroXBefore);
+  check('there is no solve button', $('#solve-constants'), null);
+  check('and no undo button', buttonByText('Undo solve'), undefined);
 
-  buttonByText('Undo solve').click();
-  check('undo restored the zero point', Number($('[data-path="carriages.saddle.zeroX"]').value), zeroXBefore);
-  check('undo message shown', /put back the way you had them/.test($('#calibration-result').textContent), true);
-
-  /* ---- 10. second reference switches to fitting travel too ---- */
+  /* ---- 10. a second reference is checked too ---- */
   cardButtons('Use as calibration reference')[1].click();
   check('two reference rows', $('#reference-table tbody').children.length, 2);
-  check('reference note mentions travel', /travel per unit/.test($('#reference-note').textContent), true);
-  const gainBefore = Number($('[data-path="carriages.bar.mastMmPerUnit"]').value);
+  check('reference note counts them', /checking against 2 bikes/.test($('#reference-note').textContent), true);
   const refInputs = $$('#reference-table tbody input');
   type(refInputs[4], '17.5'); type(refInputs[5], '5.5'); type(refInputs[6], '12.0'); type(refInputs[7], '6.0');
   pick($$('#reference-table tbody select')[1], 'C');
-  $('#solve-constants').click();
-  const gainAfter = Number($('[data-path="carriages.bar.mastMmPerUnit"]').value);
-  check('travel per unit was fitted', gainBefore !== gainAfter, true);
-  note('bar mastMmPerUnit', [gainBefore, gainAfter]);
+  $('#check-constants').click();
+  check('both references appear in the residual table', $('#calibration-result tbody').children.length, 2);
+  check('constants still untouched after checking two',
+        Number($('[data-path="carriages.saddle.zeroX"]').value), zeroXBefore);
+
+  /* ---- 10b. reset puts the constants back to the measured defaults ---- */
+  window.confirm = () => true;
+  // Typed rather than poked into the state, so this also covers the redraw putting the
+  // remembered keystrokes back over the value the reset just restored.
+  type($('[data-path="carriages.bar.zeroX"]'), '999');
+  check('a constant can still be edited by hand', Number($('[data-path="carriages.bar.zeroX"]').value), 999);
+  $('#reset-constants').click();
+  check('reset restored the measured default', $('[data-path="carriages.bar.zeroX"]').value, '336');
+  check('and the other carriage too', $('[data-path="carriages.saddle.zeroX"]').value, '-128');
+  check('and the standover mechanism', $('[data-fit-bike="standoverRiseBackDegrees"]').value, '4');
+  check('reset says it happened', /measured defaults/.test($('#reset-constants-note').textContent), true);
+  check('reset did not touch the frames', $('#frame-list').children.length, 2);
+  check('or the readings', $('[data-reading="saddleHeight"]').value, '18.5');
 
   /* ---- 11. duplicate, and removing a frame drops its reference ---- */
   cardButtons('Duplicate as another size')[0].click();
