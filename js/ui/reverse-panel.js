@@ -124,8 +124,9 @@ export function renderReverseTable(onApply) {
           'div',
           { class: 'warnbox' },
           'No standover position puts all four readings on the scales — every one asks a carriage ' +
-            'to go below its own zero mark. Either this position is outside what the fit bike can ' +
-            'reach, or a carriage constant is wrong.',
+            'to go below its own zero mark or past the end of its measured travel. Either this ' +
+            'position is outside what the fit bike can reach, or a constant is wrong. The rows ' +
+            'below say which scale gives up first.',
         ),
     sourceLine(frame),
     alternatives(setups, onApply),

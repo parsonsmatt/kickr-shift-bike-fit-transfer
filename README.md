@@ -89,15 +89,22 @@ section 6 takes the **lowest position that stays on the scales** and lists the r
 What "fits" means depends on how much of the machine has been measured. A scale can never
 read below its own zero mark, so that bound always applies. The top of each scale's travel is
 the four `mastMaxReading` / `slideMaxReading` constants, and **0 means unmeasured** — read as
-a real limit it would rule out everything, so it is treated as no limit at all.
+a real limit it would rule out everything, so it is treated as no limit at all. The two masts
+are measured (seat height 0–18.0, handlebar stack 0–7.0); the two horizontal slides are not.
 
-Which bound bites where is worth knowing, because it decides whether the rule means
-anything. Raising the standover raises both carriages, so it *reduces* the reading needed to
-reach a fixed point. The bottom of the travel therefore rules out the **high** letters and
-the top of the travel rules out the **low** ones. With the maximums left at 0 only the bottom
-applies, nothing rules out A, and "the lowest that fits" is A every time. Measure them and
-the rule starts doing real work — capping the seatpost scale two units below what position A
-asks for moves the answer to B.
+Which bound bites where is worth knowing. Raising the standover raises both carriages, so it
+*reduces* the reading needed to reach a fixed point. The bottom of the travel therefore rules
+out the **high** letters and the top of the travel rules out the **low** ones. Leave the
+maximums at 0 and only the bottom applies, so nothing rules out A and "the lowest that fits"
+is A every time — the rule does no work at all.
+
+Measured, it does a lot, because the handlebar scale is short: **70 mm of stack for a machine
+that has to stand in for frames whose bar clamps differ by far more than that.** At position A
+the bar tops out around 580 mm above the BB, below where an ordinary frame's slammed bar clamp
+already sits. So the standover rise is not a comfort setting — it is the coarse stack
+adjustment, and the 70 mm scale is the fine one. That is also why the default readings in
+`js/state.js` sit at position D: they are the setup that reproduces the default frame's own *as
+built* figures, so a fresh page shows a working answer instead of a frame nothing can reach.
 
 Section 6 also prints the *as built* figures it derived everything from. Those live in a
 collapsed panel on the frame card, and the summary used to read "needed only to use this
@@ -199,7 +206,7 @@ python3 -m http.server 8000
 # then open http://localhost:8000/tests/
 ```
 
-It runs all three suites and prints a tally (271 checks at the time of writing). Each
+It runs all three suites and prints a tally (283 checks at the time of writing). Each
 suite is also a standalone page if you want to read one in isolation.
 
 | Suite | Covers |

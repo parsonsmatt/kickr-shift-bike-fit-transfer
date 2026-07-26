@@ -48,6 +48,8 @@ try {
   note('saddle clamp Y', [before[2], after[2]]);
 
   /* ---- 2. standover select lifts both carriages ---- */
+  // From A deliberately: the default is D now, so picking D would move nothing.
+  pick($('[data-reading="standover"]'), 'A');
   const barTargetBeforeRise = $$('#target-readout .v')[3].textContent;
   pick($('[data-reading="standover"]'), 'D');
   // Three letters at 20mm along an axis leaning 4 degrees back: 59.9 up, 4.2 back.
@@ -263,6 +265,10 @@ try {
   check('side view drew something', $('#side-view').children.length > 20, true);
 
   /* ---- 13. options feed the solver ---- */
+  // A stack the fit bike can serve from position A: the handlebar scale only has 70mm of
+  // travel, so a tall frame's slammed bar clamp is out of reach without standover rise, and
+  // every combination would be filtered out for needing spacers below zero.
+  type($('[data-path$=".stack"]'), '480');
   type($('[data-option="stemLengths"]'), '100');
   type($('[data-option="stemAngles"]'), '6');
   const firstCardTableRows = () => $$('#frame-list > .bike:first-child table tbody tr');
@@ -279,7 +285,8 @@ try {
   $('#reset-all').click();
   check('reset leaves one default frame', $('#frame-list').children.length, 1);
   check('reset clears references', $('#reference-table tbody').children[0].getAttribute('colspan') !== null || $('#reference-table tbody').textContent.includes('No references yet'), true);
-  check('reset restored default readings', $('[data-reading="saddleHeight"]').value, '15.2');
+  check('reset restored default readings', $('[data-reading="saddleHeight"]').value, '9');
+  check('and the default standover position', $('[data-reading="standover"]').value, 'D');
 
   /* ---- 15. reverse: readings that set the fit bike up to match a real bike ---- */
   // Deliberately after the reset, so this runs on the measured constants and Frame A's
@@ -304,6 +311,14 @@ try {
         chosenCells().slice(1), [1, 2, 3, 4].map(i => onScale[0].children[i].textContent));
   note('chosen setup', chosenCells());
 
+  // The default readings are this very setup - they were derived from the default frame's own
+  // as-built figures - so the button reads "in use" until something moves off it.
+  check('a row matching the current readings says so instead of offering to apply',
+        !!buttonByText('in use'), true);
+  check('and there is nothing to apply while it matches', buttonByText('Use these readings'), undefined);
+  pick($('[data-reading="standover"]'), 'A');
+  type($('[data-reading="saddleHeight"]'), '12.0');
+  const wanted = chosenCells();
   buttonByText('Use these readings').click();
   const compareCells = () => $$('#compare-table tbody tr')[0].children;
   note('solved back to', [6, 7, 8, 9, 10].map(i => compareCells()[i].textContent));
@@ -315,7 +330,8 @@ try {
   check('and the built saddle height comes back',
         Math.abs(Number(compareCells()[10].textContent) - 700) < 1.5, true);
   check('the four reading inputs were written, not just the state',
-        $('[data-reading="saddleHeight"]').value !== '15.2', true);
+        [$('[data-reading="standover"]').value, $('[data-reading="saddleHeight"]').value],
+        [wanted[0], String(Number(wanted[1]))]);
   check('the applied row is marked in use',
         /in use/.test(reverseRows().find(r => r.classList.contains('best')).textContent), true);
 
@@ -333,6 +349,12 @@ try {
   check('the message quantifies the shortfall',
         /still sits [0-9]+\.[0-9]mm above the target/.test($('#frame-list .warnbox').textContent), true);
   note('too-tall message', $('#frame-list .warnbox').textContent.slice(0, 95));
+  // Section 6 has nothing to offer for a frame like that either, and says so rather than
+  // showing an empty panel: a 900mm stack is past the top of the handlebar scale everywhere.
+  check('and section 6 says no standover position reaches it',
+        /No standover position puts all four readings on the scales/.test($('#reverse-panel').textContent), true);
+  check('the alternatives table still lists every position with its reason',
+        $$('#reverse-panel tbody tr').filter(r => /off the scale/.test(r.textContent)).length, 8);
 
   /* ---- 17. a <details> built by JS survives a redraw ---- */
   // Every keystroke rebuilds the page, so a rebuilt <details> went back to its default and
@@ -349,20 +371,32 @@ try {
   check('the edits still landed', $('[data-path$=".builtStemLength"]').value, '115');
 
   /* ---- 18. measured scale maximums rule out the low standover positions ---- */
-  // Until a maximum is measured the only test is "not below zero", which only ever rules out
-  // high letters — so the lowest that fits is A. Measuring the top of the travel is what
-  // makes the choice mean anything.
+  // Both mast scales are measured on this machine, and the handlebar's 70mm of travel is what
+  // rules the low positions out: at A the bar cannot get high enough for an ordinary frame.
   const chosenStandover = () => $$('#reverse-panel .readout .v')[0].textContent;
+  // Back to a frame that can actually be reached — section 16 left the stack at an absurd 900.
+  type($('[data-path$=".stack"]'), '570');
+  $('#constants-details').open = true;
+  check('the measured handlebar travel keeps the answer off A', chosenStandover() !== 'A', true);
+  note('chosen standover on the measured maximums', chosenStandover());
+  check('and the ruled-out row names the handlebar scale',
+        /off the scale: handlebar height/.test($$('#reverse-panel tbody tr')[0].textContent), true);
+
+  // Zeroing them restores the unmeasured behaviour, where the only test is "not below zero".
+  // That only ever rules out high letters, so the lowest that fits goes back to A.
+  type($('[data-path="carriages.bar.mastMaxReading"]'), '0');
+  type($('[data-path="carriages.saddle.mastMaxReading"]'), '0');
   check('with nothing measured, the lowest that fits is A', chosenStandover(), 'A');
   const saddleHeightReading = Number($$('#reverse-panel .readout .v')[1].textContent);
-
-  $('#constants-details').open = true;
   type($('[data-path="carriages.saddle.mastMaxReading"]'), String(saddleHeightReading - 2));
   check('capping the seatpost scale moves the answer up the alphabet',
         chosenStandover() !== 'A', true);
   note('chosen standover once the seatpost scale is capped', chosenStandover());
   check('the ruled-out row names the scale responsible',
         /off the scale: saddle height/.test($$('#reverse-panel tbody tr')[0].textContent), true);
+  // That warning is about the reading currently entered rather than about the frame, so put
+  // one past the cap that was just set.
+  type($('[data-reading="saddleHeight"]'), String(saddleHeightReading));
   check('section 1 warns when a reading is past the end of a scale',
         /past the end of it/.test($('[data-hint-for="saddleHeight"]').textContent), true);
 
@@ -370,6 +404,13 @@ try {
   check('back to 0 means unmeasured, so A fits again', chosenStandover(), 'A');
   check('and section 1 stops quoting a range',
         /Runs 0 to/.test($('[data-hint-for="saddleHeight"]').textContent), false);
+
+  // Put the machine's own measured figures back, and the handlebar scale rules A out again.
+  type($('[data-path="carriages.saddle.mastMaxReading"]'), '18');
+  type($('[data-path="carriages.bar.mastMaxReading"]'), '7');
+  check('the measured maximums rule A out again', chosenStandover() !== 'A', true);
+  check('and section 1 quotes the handlebar travel',
+        /Runs 0 to 7\.0, so 70mm of travel/.test($('[data-hint-for="barHeight"]').textContent), true);
 } catch (error) {
   log.push('THREW ' + (error && error.stack ? error.stack : error));
 }

@@ -4,6 +4,12 @@ Distance from BB to seat at 0 height and 0 setback: -128mm
 Height from floor to center of steerer at 0 reach: 770mm
 Distance from BB X coordinate to center of steerer at 0 reach: 336mm
 
+Scale travel:
+
+- Max seat height adjustment: 180mm (scale reads 0 to 18.0)
+- Max handlebar stack: 70mm (scale reads 0 to 7.0)
+- Fore/aft and reach slides: not measured yet
+
 Angles:
 
 - Standover mast: 4 degree incline

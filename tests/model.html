@@ -290,6 +290,11 @@ Object.assign(ridden, {
 });
 state.frames = [ridden];
 
+// The real machine's two mast maximums are measured, and this block is about what happens
+// with and without them, so start from unmeasured and put each one in deliberately.
+state.carriages.saddle.mastMaxReading = 0;
+state.carriages.bar.mastMaxReading = 0;
+
 const built = asBuiltPositions(ridden, state.fitBike.railsBelowSaddleTop);
 const setups = trainerSetups(ridden);
 check('one row per standover position', setups.length === STANDOVER_POSITIONS.length);
@@ -350,6 +355,17 @@ check('and refuses one past a measured maximum',
       readingOnScale(state.carriages.saddle, 'mast', 20.1) === false);
 check('but accepts the maximum itself',
       readingOnScale(state.carriages.saddle, 'mast', 20) === true);
+
+// With the machine's own measured maximums in place, the 70mm handlebar scale is what does
+// the ruling out: at position A the bar cannot get high enough for an ordinary frame, so the
+// standover rise is doing real work rather than the choice always landing on A.
+reset();
+state.frames = [ridden];
+const asMeasured = trainerSetups(ridden);
+check('the measured handlebar travel rules position A out', asMeasured[0].onScale === false);
+check('and names the handlebar scale as the reason', asMeasured[0].offScale.includes('barHeight'));
+check('so the lowest that fits is not A', lowestStandoverSetup(ridden).standover !== 'A');
+note('on scale with the measured maximums', asMeasured.filter(s => s.onScale).map(s => s.standover));
 
 // The inverse of a carriage is the inverse of the forward model for arbitrary points too.
 reset();

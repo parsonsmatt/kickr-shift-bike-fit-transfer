@@ -28,12 +28,17 @@ export function defaultState() {
   return {
     schemaVersion: SCHEMA_VERSION,
 
+    // Sample readings, not measured constants: they are the setup that reproduces the
+    // default frame's own "as currently built" figures, so a fresh page shows a working
+    // answer rather than a frame nothing in the catalogue can reach. Position D because the
+    // handlebar scale only has 70mm of travel - the standover rise is the coarse stack
+    // adjustment, and at A the bar cannot get high enough for most frames.
     readings: {
-      standover: 'A',
-      saddleHeight: 15.2,
-      saddleForeAft: 7.0,
-      barHeight: 9.5,
-      barReach: 4.2,
+      standover: 'D',
+      saddleHeight: 9.0,
+      saddleForeAft: 4.6,
+      barHeight: 5.9,
+      barReach: 14.5,
     },
 
     // Measured off the bike, in constants.txt. Floor measurements are converted to the
@@ -43,14 +48,14 @@ export function defaultState() {
     carriages: {
       // The two max readings are how far each scale actually goes — the top of the seatpost
       // mast's travel, the top of the front column's, and the same for the two horizontal
-      // slides. 0 means "not measured yet" and is treated as no limit, so leaving them
-      // alone changes nothing.
+      // slides. 0 means "not measured yet" and is treated as no limit. The two masts are
+      // measured; the two horizontal slides are not yet.
       saddle: {
         zeroX: -128, // BB to the rail clamp at zero height and zero setback
         zeroY: 475,
         mastAngle: 86, // read like a seat tube angle
         mastMmPerUnit: 10, // a bigger reading raises the saddle
-        mastMaxReading: 0, // top of the seatpost mast's travel, in scale units
+        mastMaxReading: 18, // measured: the seat height scale runs 0-18cm
         slideTilt: 4, // the fore/aft mast is inclined: forward rises, back drops
         slideMmPerUnit: -10, // a bigger reading is more setback, so back and slightly down
         slideMaxReading: 0,
@@ -60,7 +65,7 @@ export function defaultState() {
         zeroY: 510,
         mastAngle: 76,
         mastMmPerUnit: 10, // a bigger reading raises the bar
-        mastMaxReading: 0, // top of the front column's rise
+        mastMaxReading: 7, // measured: the handlebar stack scale runs 0-7cm
         slideTilt: 4, // the reach mast is inclined: forward rises
         slideMmPerUnit: 10, // a bigger reading is more reach, so forward and slightly up
         slideMaxReading: 0,
