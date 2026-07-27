@@ -208,14 +208,14 @@ python3 -m http.server 8000
 # then open http://localhost:8000/tests/
 ```
 
-It runs all three suites and prints a tally (279 checks at the time of writing). Each
+It runs all three suites and prints a tally (282 checks at the time of writing). Each
 suite is also a standalone page if you want to read one in isolation.
 
 | Suite | Covers |
 | --- | --- |
 | `tests/model.html` | The maths, no DOM: standover as a vector, the stem solver hitting a reachable target exactly, saddle round trips, crank and bar-reach compensation, the steerer limit, and the reverse solve inverting the forward one at all eight standover positions. |
 | `tests/interaction.html` | The real UI, driven: typing, the caret surviving a redraw, add/remove/duplicate frames, pasting a geometry table, resetting the constants to the measured defaults, reset all, and applying a reverse setup. |
-| `tests/migration.html` | Loads a save written by the previous single-file version and checks every field survives the rename, ids included, and that the stored calibration references are dropped. Also that a version 3 save skips the rename step and only has its spacer field converted — the migration applies one version's change at a time, and running the rename over an already-renamed save finds none of the keys it looks for and hands back an empty one. |
+| `tests/migration.html` | Loads a save written by the previous single-file version and checks every field survives the rename, ids included, and that the stored calibration references are dropped. Also that a version 3 save skips the rename step and only has its spacer field converted — the migration applies one version's change at a time, and running the rename over an already-renamed save finds none of the keys it looks for and hands back an empty one. Version 6 is the only migration that changes a *value* (the 50 mm saddle-stack placeholder, now measured at 40), so it is tested for narrowness: any other figure is left alone. |
 
 The suites run **one at a time**, and the runner tears each frame down before starting the
 next. Two of them own `localStorage`, and a suite publishes its results before its app's
@@ -251,9 +251,9 @@ Section 1 separates two different kinds of number, which is worth preserving:
 - **Fit bike constants** — the collapsed panel: where each carriage's zero sits, which way
   its slides run, and the standover mechanism. Measured once off the machine.
 
-`railsBelowSaddleTop` and `noseToRailCentre` still hold generic defaults (50 and 125) and
-depend on the saddle actually fitted, so they are worth measuring. Both are single values
-covering the fit bike and every frame: the page matches *rail* positions, so a different
+`railsBelowSaddleTop` (40) and `noseToRailCentre` (125) are measured off the saddle rather
+than off the bike, so they only hold while that saddle is the one being ridden. Both are
+single values covering the fit bike and every frame: the page matches *rail* positions, so a different
 saddle on the target bike still gets its rails in the right place, but its top would sit
 higher or lower by the difference in shell stack and nothing here knows that.
 

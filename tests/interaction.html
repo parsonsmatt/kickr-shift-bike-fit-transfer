@@ -143,7 +143,7 @@ try {
   /* ---- 3. state is persisted, in the new schema ---- */
   await sleep(400);
   const saved = JSON.parse(localStorage.getItem('fit-transfer-v2'));
-  check('saved schemaVersion', saved.schemaVersion, 5);
+  check('saved schemaVersion', saved.schemaVersion, 6);
   check('saved reading', saved.readings.saddleHeight, 18.5);
   check('saved uses new frame field names', 'headTubeAngle' in saved.frames[0], true);
   check('save status says saved', /^saved \|/.test($('#save-status').textContent), true);
@@ -299,7 +299,7 @@ try {
   /* ---- 14. reset ---- */
   $('#reset-all').click();
   check('reset leaves one default frame', $('#frame-list').children.length, 1);
-  check('reset restored default readings', $('[data-reading="saddleHeight"]').value, '9');
+  check('reset restored default readings', $('[data-reading="saddleHeight"]').value, '10');
   check('and the default standover position', $('[data-reading="standover"]').value, 'D');
 
   /* ---- 15. reverse: readings that set the fit bike up to match a real bike ---- */

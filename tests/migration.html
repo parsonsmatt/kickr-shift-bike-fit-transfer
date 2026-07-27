@@ -59,6 +59,7 @@ try {
   check('bar height reading', $('[data-reading="barHeight"]').value, '10.2');
   check('bar reach reading', $('[data-reading="barReach"]').value, '5.1');
   check('crank length', $('[data-fit-bike="crankLength"]').value, '172.5');
+  // 47 rather than the 50 placeholder, so version 6 leaves it alone — see below.
   check('rails below saddle top', $('[data-fit-bike="railsBelowSaddleTop"]').value, '47');
   check('nose to rail centre', $('[data-fit-bike="noseToRailCentre"]').value, '128');
   check('match mode', $('[data-fit-bike="matchMode"]').value, 'hoods');
@@ -121,7 +122,7 @@ try {
   reading.dispatchEvent(new Event('input', { bubbles: true }));
   await sleep(400);
   const rewritten = JSON.parse(localStorage.getItem('fit-transfer-v2'));
-  check('rewritten at version 5', rewritten.schemaVersion, 5);
+  check('rewritten at the current version', rewritten.schemaVersion, 6);
   check('old keys gone', ['read', 'kk', 'fit', 'opt', 'bikes', 'cal', 'conv'].filter(k => k in rewritten), []);
   check('and no frame still carries the version 3 spacer field',
         rewritten.frames.filter(f => 'spacersAvailable' in f), []);
@@ -175,6 +176,16 @@ try {
         [1, 'Version 3', 601]);
   check('v3 spacer limit converted', current().frames[0].exposedSteerer, 60);
   check('v3 save has no references left either', 'references' in current(), false);
+
+  // Version 6 measured the saddle. It is the one migration that changes a value rather than a
+  // shape, so it has to be narrow: only the old 50mm placeholder moves.
+  adoptState({ schemaVersion: 5, fitBike: { railsBelowSaddleTop: 50 }, frames: [] });
+  check('the 50mm placeholder becomes the measured 40', current().fitBike.railsBelowSaddleTop, 40);
+  adoptState({ schemaVersion: 5, fitBike: { railsBelowSaddleTop: 43.5 }, frames: [] });
+  check('a measured value is left alone', current().fitBike.railsBelowSaddleTop, 43.5);
+  adoptState({ schemaVersion: 6, fitBike: { railsBelowSaddleTop: 50 }, frames: [] });
+  check('and a save already at version 6 means that 50 was typed on purpose',
+        current().fitBike.railsBelowSaddleTop, 50);
 
   // A frame that never had the field falls back to the default rather than to NaN.
   adoptState({ schemaVersion: 3, frames: [{ id: 'bare', name: 'Bare' }] });

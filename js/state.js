@@ -20,8 +20,9 @@ import { normaliseStandover } from './model/standover.js';
  *   3  every field renamed to a spelled-out name
  *   4  frames store exposedSteerer (a measurable length) rather than spacersAvailable
  *   5  calibration references dropped along with the constants check that read them
+ *   6  the saddle's shell stack measured, so the generic 50mm default became 40mm
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export function defaultState() {
   return {
@@ -31,11 +32,12 @@ export function defaultState() {
     // default frame's own "as currently built" figures, so a fresh page shows a working
     // answer rather than a frame nothing in the catalogue can reach. Position D because the
     // handlebar scale only has 70mm of travel - the standover rise is the coarse stack
-    // adjustment, and at A the bar cannot get high enough for most frames.
+    // adjustment, and at A the bar cannot get high enough for most frames. The two saddle
+    // numbers depend on railsBelowSaddleTop, so they moved when that was measured.
     readings: {
       standover: 'D',
-      saddleHeight: 9.0,
-      saddleForeAft: 4.6,
+      saddleHeight: 10.0,
+      saddleForeAft: 4.8,
       barHeight: 5.9,
       barReach: 14.5,
     },
@@ -78,9 +80,10 @@ export function defaultState() {
       standoverRiseBackDegrees: 4,
 
       // Set on the bike rather than measured off it: the cranks adjust 165-175 in 2.5mm
-      // steps, and the saddle figures depend on which saddle is fitted.
+      // steps. The two saddle figures are measured off the saddle itself rather than the
+      // bike, so they only hold while you ride that saddle - see constants.txt.
       crankLength: 170,
-      railsBelowSaddleTop: 50,
+      railsBelowSaddleTop: 40,
       noseToRailCentre: 125,
       // How far back on its own rails the saddle is clamped on the fit bike. Same sign as a
       // frame's builtRailOffset: positive is back. 0 means clamped at rail centre, which is
@@ -220,6 +223,20 @@ function dropReferences(saved) {
   return rest;
 }
 
+/**
+ * Version 6: railsBelowSaddleTop held a generic 50mm placeholder until the saddle was
+ * actually measured at 40mm. Unlike the other migrations this changes a *value*, not a
+ * shape, so it is deliberately narrow: only a save still holding the old placeholder
+ * exactly is moved. A deliberately typed 50 is indistinguishable from the placeholder and
+ * gets moved too - retype it if that happens. Every saddle height on the page is measured
+ * to the saddle top, so this shifts where the rails are assumed to sit by 10mm and nothing
+ * else.
+ */
+function measureSaddleStack(saved) {
+  if (saved.fitBike?.railsBelowSaddleTop !== 50) return saved;
+  return { ...saved, fitBike: { ...saved.fitBike, railsBelowSaddleTop: 40 } };
+}
+
 /** Rewrites a save from any earlier version into the current shape, one version at a time. */
 function migrate(saved) {
   const version = Number(saved.schemaVersion ?? saved.conv ?? 1);
@@ -229,6 +246,7 @@ function migrate(saved) {
   if (version < 3) current = renameEverything(current, version);
   if (version < 4) current = useExposedSteerer(current);
   if (version < 5) current = dropReferences(current);
+  if (version < 6) current = measureSaddleStack(current);
   return { ...current, schemaVersion: SCHEMA_VERSION };
 }
 
