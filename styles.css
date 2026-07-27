@@ -78,8 +78,9 @@ tr.best td{font-weight:600}
 .bike.active{border-left-color:var(--axis)}
 .bike .head{display:flex;gap:10px;align-items:center;justify-content:space-between;cursor:pointer;flex-wrap:wrap}
 .bike .headright{display:flex;gap:10px;align-items:center}
-.bike .head .kill{font-size:15px;line-height:1;padding:2px 8px;color:var(--ink2)}
-.bike .head .kill:hover{color:#b3261e;border-color:#b3261e}
+/* Delete: on a frame card's header and on each saved profile's row. */
+.kill{font-size:15px;line-height:1;padding:2px 8px;color:var(--ink2)}
+.kill:hover{color:#b3261e;border-color:#b3261e}
 .bike .name{font-weight:600;font-size:15px}
 .bike .name small{font-weight:500;color:var(--ink2);font-size:12px;margin-left:6px}
 .verdict{font-family:'JetBrains Mono',monospace;font-size:13px}

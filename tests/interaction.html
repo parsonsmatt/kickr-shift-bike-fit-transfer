@@ -43,6 +43,8 @@ try {
   // good in headless Chrome, so the answer is stubbed here rather than next to each click. The
   // sections that care about declining override it themselves and put it back.
   window.confirm = () => true;
+  // Profile names come from a prompt; take the suggestion unless a test says otherwise.
+  window.prompt = (question, suggestion) => suggestion;
 
   /* ---- 1. typing a reading moves the target readout ---- */
   const readoutValues = () => $$('#target-readout .v').map(n => n.textContent);
@@ -184,6 +186,87 @@ try {
   check('and putting the stock front end back restores the target',
         Math.abs(barTargetAt() - stemmedTargetX) < 0.05, true);
   check('and the answer', solvedStem(), stemmedAnswer);
+
+  /* ---- 2g. fit profiles: more than one setup on the same machine ---- */
+  // A profile is section 1 without the constants panel: the five readings plus the current
+  // setup. It exists so a second rider - or a second position - does not mean writing numbers
+  // down on paper.
+  const profileRows = () => $$('#profiles-panel tbody tr');
+  const profileButtons = label =>
+    $$('#profiles-panel button').filter(b => b.textContent.trim() === label);
+  check('nothing saved to begin with', profileRows().length, 0);
+  check('and the empty list says what a profile would be for',
+        /switch between riders/.test($('#profiles-panel').textContent), true);
+
+  $('#save-profile').click();
+  check('saving captures the bike as one row', profileRows().length, 1);
+  check('named from the prompt', /Profile 1/.test(profileRows()[0].textContent), true);
+  check('and it is the setup on the bike', /on the bike/.test(profileRows()[0].textContent), true);
+  check('so there is nothing to load', profileButtons('Use').length, 0);
+  check('the note counts it and says what it does not carry',
+        /1 profile saved\..*does not hold the measured constants/.test($('#profiles-note').textContent), true);
+
+  // Moving anything the profile holds - a reading or a setup field - has to show up as drift,
+  // not as a silently stale row.
+  const savedHeight = $('[data-reading="saddleHeight"]').value;
+  type($('[data-reading="saddleHeight"]'), '15');
+  check('changing a reading takes it off the bike', profileButtons('Use').length, 1);
+  type($('[data-reading="saddleHeight"]'), savedHeight);
+  check('and putting it back puts it on again', profileButtons('Use').length, 0);
+  type($('[data-fit-bike="stemLength"]'), '120');
+  check('a setup field counts too, not just the readings', profileButtons('Use').length, 1);
+
+  // Declining the confirm has to leave the bike exactly as it was, since the dialog is where
+  // the list of what would change is spelled out.
+  window.confirm = () => false;
+  profileButtons('Use')[0].click();
+  check('a declined load changes nothing', $('[data-fit-bike="stemLength"]').value, '120');
+  window.confirm = () => true;
+
+  type($('[data-reading="saddleHeight"]'), '15');
+  profileButtons('Use')[0].click();
+  check('loading a profile writes the reading back into the form',
+        $('[data-reading="saddleHeight"]').value, savedHeight);
+  check('and the setup field with it', $('[data-fit-bike="stemLength"]').value, '90');
+  check('which puts it back on the bike', profileButtons('Use').length, 0);
+
+  // The constants describe the machine, so a profile must not carry them: loading someone
+  // else's fit moving a carriage zero would move every answer on the page with it.
+  type($('[data-path="carriages.bar.zeroX"]'), '340');
+  check('a constant is not part of a profile', profileButtons('Use').length, 0);
+  type($('[data-path="carriages.bar.zeroX"]'), '336');
+
+  type($('[data-fit-bike="stemLength"]'), '110');
+  profileButtons('Save over')[0].click();
+  check('saving over a profile takes the bike as it stands now', profileButtons('Use').length, 0);
+  type($('[data-fit-bike="stemLength"]'), '90');
+  check('so the old figure now reads as drift', profileButtons('Use').length, 1);
+  profileButtons('Use')[0].click();
+  check('and loads back as 110', $('[data-fit-bike="stemLength"]').value, '110');
+  type($('[data-fit-bike="stemLength"]'), '90');
+  profileButtons('Save over')[0].click();
+
+  window.prompt = () => 'Winter position';
+  profileButtons('Rename')[0].click();
+  check('renaming keeps the row and its readings',
+        /Winter position/.test(profileRows()[0].textContent) && profileRows().length === 1, true);
+  window.prompt = (question, suggestion) => suggestion;
+
+  $('#save-profile').click();
+  check('a second profile can be saved', profileRows().length, 2);
+  await sleep(400);
+  check('profiles are persisted',
+        JSON.parse(localStorage.getItem('fit-transfer-v2')).profiles.map(p => p.name),
+        ['Winter position', 'Profile 2']);
+  check('and carry the readings and the setup, not the constants',
+        Object.keys(JSON.parse(localStorage.getItem('fit-transfer-v2')).profiles[0]).sort(),
+        ['id', 'name', 'readings', 'setup']);
+
+  profileButtons('×')[0].click();
+  profileButtons('×')[0].click();
+  check('deleting them all brings the empty note back', profileRows().length, 0);
+  check('and the bike is untouched by the deletions',
+        $('[data-reading="saddleHeight"]').value, savedHeight);
 
   /* ---- 3. state is persisted, in the new schema ---- */
   await sleep(400);

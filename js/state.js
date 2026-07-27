@@ -6,6 +6,7 @@
 //                   which way its two slides run (see model/fit-bike.js)
 //   fitBike         fixed facts about the fit bike itself, plus how to match bar position
 //   options         parts catalogue and the warning thresholds
+//   profiles        saved fit setups: readings plus current setup (see model/profile.js)
 //   frames          candidate frames (see model/frame.js)
 //   activeFrameId   which frame the side view draws
 
@@ -113,6 +114,10 @@ export function defaultState() {
       solutionsPerFrame: 6,
       toleranceMm: 4,
     },
+
+    // Saved fit setups - see model/profile.js. Empty to begin with: the readings on the form
+    // are the only setup there is until someone saves one.
+    profiles: [],
 
     frames: [createFrame('Frame A')],
     activeFrameId: null,
@@ -280,6 +285,7 @@ export function adoptState(saved) {
       saddle: { ...base.carriages.saddle, ...incoming.carriages?.saddle },
       bar: { ...base.carriages.bar, ...incoming.carriages?.bar },
     },
+    profiles: incoming.profiles || [],
     frames: (incoming.frames || []).map(frame => ({ ...createFrame(), ...frame })),
   };
 

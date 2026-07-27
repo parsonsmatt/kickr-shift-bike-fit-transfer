@@ -141,6 +141,7 @@ js/model/fit-bike.js        the carriage model: readings to target positions
 js/model/frame.js           a candidate frame, and its bar/saddle geometry (pure)
 js/model/solver.js          stem length, angle and spacers that hit the target
 js/model/reverse.js         the other way round: a real bike back to fit bike readings
+js/model/profile.js         saved fit setups: capture, load, and what differs
 js/model/geometry-table.js  parsing a pasted manufacturer geometry table
 
 js/ui/render.js             redraws everything; refresh() = save then render
@@ -148,6 +149,7 @@ js/ui/focus.js              keeps the caret alive across a redraw
 js/ui/disclosure.js         keeps a <details> open across a redraw
 js/ui/fields.js             labelled inputs, readout cells, chips, tables
 js/ui/fit-bike-panel.js     section 1, including the constants panel and its reset
+js/ui/profiles-panel.js     section 1's saved profiles
 js/ui/frames-panel.js       section 2
 js/ui/paste-panel.js        section 2's geometry paste
 js/ui/side-view.js          section 3, the scale drawing
@@ -228,7 +230,7 @@ python3 -m http.server 8000
 # then open http://localhost:8000/tests/
 ```
 
-It runs all three suites and prints a tally (320 checks at the time of writing). Each
+It runs all three suites and prints a tally (344 checks at the time of writing). Each
 suite is also a standalone page if you want to read one in isolation.
 
 | Suite | Covers |
@@ -278,6 +280,13 @@ one being ridden. Both are
 single values covering the fit bike and every frame: the page matches *rail* positions, so a different
 saddle on the target bike still gets its rails in the right place, but its top would sit
 higher or lower by the difference in shell stack and nothing here knows that.
+
+That split is also what a **fit profile** is: a saved copy of the readings and the current
+setup, with the constants left out. One bike, more than one rider or more than one position,
+and nothing written down on paper. Loading one spells out what it is about to change and asks
+first, because a profile carries a stem and a saddle as well as four numbers — those are parts
+you have to actually swap for the answers to mean anything. Frames are not in a profile: a
+frame is a bike, and it is the same bike whoever is sitting on it.
 
 The one measured value taken on inference rather than from `constants.txt`:
 `carriages.saddle.slideMmPerUnit` is **−10**, i.e. a bigger fore/aft reading means more

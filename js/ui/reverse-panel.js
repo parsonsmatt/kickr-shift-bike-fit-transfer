@@ -12,6 +12,7 @@ import { SCALE_INPUTS } from '../model/fit-bike.js';
 import { trainerSetups, lowestStandoverSetup } from '../model/reverse.js';
 import { readoutCell, tableHead, tableBody, chip } from './fields.js';
 import { disclosure } from './disclosure.js';
+import { forgetFocus } from './focus.js';
 
 const SCALE_KEYS = Object.keys(SCALE_INPUTS);
 
@@ -30,6 +31,9 @@ const applyButton = (setup, onApply, label) => {
       standover: setup.standover,
       ...Object.fromEntries(SCALE_KEYS.map(key => [key, toScaleMark(setup[key])])),
     };
+    // Replacing the readings wholesale, so drop any remembered keystroke: the redraw would
+    // otherwise write the last thing typed back over a reading this just set.
+    forgetFocus();
     onApply();
   };
   return button;

@@ -4,10 +4,11 @@ import { select } from './lib/dom.js';
 import { state, adoptState, resetState } from './state.js';
 import { loadSaved, onSaveStatus } from './persistence.js';
 import { bindStaticInputs, syncStaticInputs, bindConstantsReset } from './ui/fit-bike-panel.js';
+import { bindProfileButtons } from './ui/profiles-panel.js';
 import { bindFrameButtons } from './ui/frames-panel.js';
 import { bindPastePanel } from './ui/paste-panel.js';
 import { forgetFocus } from './ui/focus.js';
-import { render, refresh } from './ui/render.js';
+import { render, refresh, refreshSetup } from './ui/render.js';
 
 const EXPORT_FILENAME = 'fit-transfer.json';
 
@@ -69,6 +70,7 @@ async function start() {
 
   bindStaticInputs(refresh);
   bindConstantsReset(refresh);
+  bindProfileButtons(refreshSetup);
   bindFrameButtons(refresh);
   bindPastePanel(refresh);
   bindFileButtons();

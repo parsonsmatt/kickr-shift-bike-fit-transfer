@@ -10,6 +10,7 @@ import {
   renderTargetReadout,
   syncStaticInputs,
 } from './fit-bike-panel.js';
+import { renderProfiles, renderProfileNote } from './profiles-panel.js';
 import { renderFrames } from './frames-panel.js';
 import { renderCompareTable } from './compare-table.js';
 import { renderReverseTable } from './reverse-panel.js';
@@ -26,10 +27,11 @@ function refreshFrameNames() {
 }
 
 /**
- * Section 5 writes the four scale readings, which live in static inputs in the markup
- * rather than being rebuilt each redraw, so they have to be pushed back out by hand.
+ * Section 5 and the profile list write the readings and the setup fields, which live in static
+ * inputs in the markup rather than being rebuilt each redraw, so they have to be pushed back
+ * out by hand.
  */
-function applyReadings() {
+export function refreshSetup() {
   syncStaticInputs();
   refresh();
 }
@@ -38,9 +40,11 @@ export function render() {
   renderScaleHints();
   renderCarriageConstants(refresh);
   renderTargetReadout();
+  renderProfiles(refreshSetup);
+  renderProfileNote();
   renderFrames(refresh, refreshFrameNames);
   renderCompareTable(refresh);
-  renderReverseTable(applyReadings);
+  renderReverseTable(refreshSetup);
   renderSideView();
   restoreFocus();
 }
