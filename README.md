@@ -191,9 +191,9 @@ Names used throughout, in case a term is unfamiliar:
 | `needsNegativeSpacers` | The bar would have to sit below the frame's own slammed height. Not a build, so the stem table leaves these out entirely rather than printing a negative spacer stack. If a frame has nothing left, the card says how far above the target its closest option still sits. The model keeps them — the ranking already sorts them last — so only the display filters. |
 | `railClamp` | Where the saddle's rails sit — the point both sides match. On a frame it is the post's clamp axis shifted back by `railOffset`; on the fit bike it is the saddle carriage shifted back by `saddleRailOffset`. |
 | `saddleRailOffset` | How far back on its own rails the saddle is clamped **on the fit bike**. The carriage locates the clamp, not the saddle, and those are the same point only at rail centre — so this comes off every frame's saddle answer at full size. Same sign as a frame's `railOffset`: positive is back. It is folded into the offset that `carriagePosition` and `carriageReadings` both take, so the forward and reverse directions cannot disagree about it. |
-| `railsBelowSaddleTop` | Saddle shell stack: rail centre to the top of the saddle. |
+| `railsBelowSaddleTop` | Saddle shell stack: rail centre up to the top of the saddle. Every saddle height on the page is measured to the **top**, so this is the whole conversion between a height and where the rails are — in both directions. One value, shared by the fit bike and every frame, which is where the assumption that you move a single saddle between bikes physically lives. |
 | `railOffset` | How far back from rail centre the saddle must slide, after the fitted post's setback is used up. |
-| `heightAlongSeatAxis` | Saddle height as you would measure it *on that frame* — differs from the fit bike's number whenever the seat angle does. |
+| `heightAlongSeatAxis` | Saddle height as you would measure it *on that frame*: bottom bracket to the **top of the saddle**, along that frame's own seat axis. Differs from the fit bike's number whenever the seat angle does. The exact inverse of what `frame.js` does to a built height, via `railsBelowSaddleTop`. |
 | `standoverOffset` | How far position A→H moves both horizontal masts, as `[dx, dy]`. 20 mm per letter along an axis leaning 4° back, so mostly up and slightly rearward. |
 | `standoverTravel` | The same movement as a distance along that axis (20 mm per letter) rather than as components. |
 | `slideTilt` | Incline of a near-level slide. 4° here: the mast rises going forward and drops going back. |
@@ -252,7 +252,10 @@ Section 1 separates two different kinds of number, which is worth preserving:
   its slides run, and the standover mechanism. Measured once off the machine.
 
 `railsBelowSaddleTop` and `noseToRailCentre` still hold generic defaults (50 and 125) and
-depend on the saddle actually fitted, so they are worth measuring.
+depend on the saddle actually fitted, so they are worth measuring. Both are single values
+covering the fit bike and every frame: the page matches *rail* positions, so a different
+saddle on the target bike still gets its rails in the right place, but its top would sit
+higher or lower by the difference in shell stack and nothing here knows that.
 
 The one measured value taken on inference rather than from `constants.txt`:
 `carriages.saddle.slideMmPerUnit` is **−10**, i.e. a bigger fore/aft reading means more

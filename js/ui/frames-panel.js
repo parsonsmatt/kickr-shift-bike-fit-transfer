@@ -182,7 +182,7 @@ function saddleSection(frame) {
       readoutCell(
         'Height on this frame',
         oneDecimal(saddle.heightAlongSeatAxis),
-        `mm along its ${oneDecimal(frame.seatTubeAngle)} deg axis`,
+        `mm to saddle top, along its ${oneDecimal(frame.seatTubeAngle)} deg axis`,
       ),
       readoutCell('Clamp behind seat axis', oneDecimal(saddle.clampBehindAxis), 'mm'),
       readoutCell('Post setback fitted', oneDecimal(frame.seatpostSetback), 'mm', { small: true }),

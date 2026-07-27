@@ -64,8 +64,9 @@
           frame to match. A frame that differs has its saddle height corrected by the difference.</div></div>
       <div class="field"><label>Rails below saddle top (mm)</label>
         <input type="text" inputmode="decimal" data-fit-bike="railsBelowSaddleTop">
-        <div class="hint">Saddle shell stack, for the saddle you are actually riding. Affects the
-          reported saddle height and the drawing, not the seatpost answer.</div></div>
+        <div class="hint">Rail centre up to the top of the saddle. Every saddle height on this page
+          is measured to the <b>top</b>, so this is what converts those into where the rails sit
+          &mdash; in both directions. One saddle for the fit bike and every frame.</div></div>
       <div class="field"><label>Nose to rail centre (mm)</label>
         <input type="text" inputmode="decimal" data-fit-bike="noseToRailCentre">
         <div class="hint">Same saddle. Drawing and reach readout only.</div></div>
@@ -199,7 +200,9 @@
     <p><b>Headset stack.</b> Frame stack is measured to the top of the head tube, but spacers start on top of the upper headset cover. That cover is 5&ndash;20&nbsp;mm depending on the frame and it moves the answer by exactly its own height. It is per-frame and defaults to 15&nbsp;mm.</p>
     <p><b>Stem stack height.</b> Stem angle is measured from perpendicular to the steerer, and the stem's clamp is roughly 40&nbsp;mm tall, so half of it is added above the spacers to reach the bar clamp centreline.</p>
     <p><b>Saddle height across seat angles.</b> The same saddle position produces a different saddle height number on a frame with a different seat angle. The per-frame figure is recomputed along that frame's own axis rather than carried across.</p>
-    <p><b>Saddle.</b> The fit bike's saddle carriage locates the <i>clamp</i>, but what gets reproduced on a real frame is where the saddle ends up &mdash; its rail centre. Those are the same point only when the saddle is clamped at rail centre, so if it is slid back on the fit bike, say so above: the whole offset comes straight off every frame's saddle answer. Run the saddle you actually ride either way. Rail drop affects the reported saddle height; nose-to-rail only affects the drawing and the reach figure.</p>
+    <p><b>One saddle everywhere.</b> Rail drop and nose-to-rail are single figures shared by the fit bike and every frame, so the whole page assumes you move one saddle between them. That is what makes matching the rails the right thing to match. Run a different saddle on the target bike and the rails still land where they should, but its top sits higher or lower by the difference in shell stack &mdash; add that difference to the saddle height you dial in, since nothing here knows about it.</p>
+    <p><b>Saddle height.</b> Every saddle height on this page &mdash; the per-frame figure, the compare column and the <i>as built</i> input &mdash; is measured from the bottom bracket to the <b>top of the saddle</b>, along that frame's own seat axis. Not to the rails.</p>
+    <p><b>Saddle position.</b> The fit bike's saddle carriage locates the <i>clamp</i>, but what gets reproduced on a real frame is where the saddle ends up &mdash; its rail centre. Those are the same point only when the saddle is clamped at rail centre, so if it is slid back on the fit bike, say so above: the whole offset comes straight off every frame's saddle answer. Run the saddle you actually ride either way.</p>
   </div>
 </section>
 
