@@ -7,6 +7,8 @@ export const DEGREES = Math.PI / 180;
 /** Unit vector pointing `degrees` anticlockwise from straight forward. */
 export const unitVectorAt = degrees => [Math.cos(degrees * DEGREES), Math.sin(degrees * DEGREES)];
 
+export const add = (point, other) => [point[0] + other[0], point[1] + other[1]];
+
 export const subtract = (point, other) => [point[0] - other[0], point[1] - other[1]];
 
 export const magnitude = vector => Math.hypot(vector[0], vector[1]);

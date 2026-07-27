@@ -447,6 +447,30 @@ try {
   type($('[data-option="solutionsPerFrame"]'), '1');
   check('solutions shown honours the limit', firstCardRows(), 1);
 
+  // 13b. The limits on the form are limits, not footnotes. When nothing inside them lands close
+  // enough, the headline says so rather than showing a green match for a stem you said you would
+  // not fit.
+  const verdictText = () => $('#frame-list > .bike:first-child .verdict').textContent;
+  const verdictChip = () => $('#frame-list > .bike:first-child .verdict .chip');
+  type($('[data-option="solutionsPerFrame"]'), '6');
+  type($('[data-option="stemLengths"]'), '100,130');
+  type($('[data-option="stemAngles"]'), '0,17');
+  type($('[data-option="maxStemAngle"]'), '25');
+  type($('[data-option="maxStemLength"]'), '130');
+  const openVerdict = verdictText();
+  type($('[data-option="maxStemLength"]'), '100');
+  check('shrinking the limit does not change what the frame needs geometrically',
+        /mm x /.test(verdictText()), true);
+  type($('[data-option="maxStemAngle"]'), '0');
+  check('a headline outside your limits says so', /outside your limits/.test(verdictText()), true);
+  check('and is not dressed up as a green match',
+        verdictChip().className.includes('g'), false);
+  note('verdict inside limits vs outside', [openVerdict, verdictText()]);
+  type($('[data-option="maxStemAngle"]'), '25');
+  type($('[data-option="maxStemLength"]'), '120');
+  type($('[data-option="stemLengths"]'), '60,70,80,90,100,110,120,130');
+  type($('[data-option="stemAngles"]'), '0,6,7,8,10,12,17');
+
   /* ---- 14. reset ---- */
   $('#reset-all').click();
   check('reset leaves one default frame', $('#frame-list').children.length, 1);
@@ -486,12 +510,26 @@ try {
   const wanted = chosenCells();
   buttonByText('Use these readings').click();
   const compareCells = () => $$('#compare-table tbody tr')[0].children;
+
+  // With the everyday 4mm tolerance the ranking treats every build inside it as equally on
+  // target and offers the least extreme one, which need not be the one the bike is wearing. To
+  // ask whether the geometry inverted at all, close the band down first.
+  type($('[data-option="toleranceMm"]'), '0.5');
   note('solved back to', [6, 7, 8, 9, 10].map(i => compareCells()[i].textContent));
   check('applying the readings solves back to the built stem', compareCells()[6].textContent, '100mm');
   check('and the built stem angle', compareCells()[7].textContent, '-6.0');
   check('and the built spacer stack', compareCells()[8].textContent, '20.0mm');
   check('the miss is no worse than the rounding to whole millimetres',
         Number(compareCells()[9].textContent) < 2.5, true);
+  type($('[data-option="toleranceMm"]'), '4');
+
+  // And with the band open again, what it offers instead has to be a flatter stem that is still
+  // on the target - not a longer or steeper one bought with a fraction of a millimetre.
+  note('offered inside a 4mm band', [6, 7, 8, 9].map(i => compareCells()[i].textContent));
+  check('a wider tolerance offers a flatter stem, not a more extreme one',
+        Math.abs(Number(compareCells()[7].textContent)) <= 6, true);
+  check('still inside the tolerance', Number(compareCells()[9].textContent) <= 4, true);
+  check('and nothing flagged against it', compareCells()[12].textContent.trim(), 'clear');
   check('and the built saddle height comes back',
         Math.abs(Number(compareCells()[10].textContent) - 700) < 1.5, true);
   check('the four reading inputs were written, not just the state',

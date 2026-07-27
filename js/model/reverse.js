@@ -12,9 +12,29 @@
 // whichever keeps all four readings on the scales.
 
 import { state } from '../state.js';
+import { subtract } from '../lib/vector.js';
 import { asBuiltPositions } from './frame.js';
 import { STANDOVER_POSITIONS } from './standover.js';
 import { carriageReadings, offScaleReadings, barOffsetFor, saddleOffsetFor } from './fit-bike.js';
+import { barClampCorrection, railClampCorrection } from './solver.js';
+
+/**
+ * The fit bike target points that the forward direction would turn back into this bike as it is
+ * built today.
+ *
+ * Not simply where its bar clamp and rails are: the forward direction adds a correction to each
+ * on the way from the target to the frame - a bar reach difference in hood-match mode, a crank
+ * length difference for the saddle - so those have to come off here. Without this step the two
+ * directions were not inverses of each other, and applying the readings this section produces
+ * would land the saddle or the bar out by the size of the correction.
+ */
+export function targetsThatProduce(frame) {
+  const built = asBuiltPositions(frame, state.fitBike.railsBelowSaddleTop);
+  return {
+    bar: subtract(built.bar, barClampCorrection(frame)),
+    saddle: subtract(built.saddle, railClampCorrection(frame)),
+  };
+}
 
 /** The four readings that reproduce `positions` with the standover at `letter`. */
 export function readingsFor(positions, letter) {
@@ -40,7 +60,7 @@ export function readingsFor(positions, letter) {
  * has been measured (`mastMaxReading` / `slideMaxReading`, 0 meaning unmeasured).
  */
 export function trainerSetups(frame) {
-  const positions = asBuiltPositions(frame, state.fitBike.railsBelowSaddleTop);
+  const positions = targetsThatProduce(frame);
 
   return STANDOVER_POSITIONS.map(letter => {
     const readings = readingsFor(positions, letter);

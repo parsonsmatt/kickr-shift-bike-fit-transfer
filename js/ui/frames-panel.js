@@ -5,7 +5,7 @@ import { select, element, clearChildren } from '../lib/dom.js';
 import { oneDecimal, whole, signedOneDecimal } from '../lib/format.js';
 import { state } from '../state.js';
 import { createFrame, newFrameId, spacerRoom, asBuiltOverflowsSteerer } from '../model/frame.js';
-import { stemSolutions, saddleSetup, isMatch, needsNegativeSpacers } from '../model/solver.js';
+import { stemSolutions, saddleSetup, isMatch, isRecommendable, needsNegativeSpacers } from '../model/solver.js';
 import { numberField, textField, readoutCell, chip, table } from './fields.js';
 import { disclosure } from './disclosure.js';
 
@@ -56,22 +56,30 @@ function steererHint(frame) {
   return measured;
 }
 
-/** "100mm x -6.0 deg | 20.0mm spacers | match 1.2mm" — the one-line answer per frame. */
+/**
+ * "100mm x -6.0 deg | 20.0mm spacers | match 1.2mm" — the one-line answer per frame.
+ *
+ * The green chip needs the answer to be inside the limits on the form as well as on the target.
+ * The ranking already prefers a build that is, so a headline breaking one means nothing that
+ * fits inside them lands close enough - which is worth saying rather than dressing up as a
+ * match.
+ */
 function verdictLine(best) {
   if (!best) return element('div', { class: 'verdict' }, 'no catalogue');
 
+  const distance = `${isMatch(best) ? 'match' : 'closest'} ${oneDecimal(best.missMm)}mm`;
   const status = !best.reachable
     ? 'not reachable'
-    : isMatch(best)
-      ? `match ${oneDecimal(best.missMm)}mm`
-      : `closest ${oneDecimal(best.missMm)}mm`;
+    : best.withinLimits
+      ? distance
+      : `${distance}, outside your limits`;
 
   return element(
     'div',
     { class: 'verdict' },
     element('b', {}, `${whole(best.stemLength)}mm x ${signedOneDecimal(best.stemAngle)} deg`),
     ` | ${oneDecimal(best.spacerHeight)}mm spacers | `,
-    chip(status, best.reachable && isMatch(best)),
+    chip(status, isRecommendable(best)),
   );
 }
 

@@ -92,6 +92,17 @@ slides, two unknowns, one 2×2 solve per carriage (`carriageReadings`). It reuse
 `asBuiltPositions` to get the two points off a real build, so it reads the *as built*
 stem/spacers/saddle figures on the frame card and nothing else.
 
+**Both corrections have to be inverted along with the carriages.** The forward direction does
+not aim a frame at the target points directly: it adds a crank-length correction to the saddle
+and, in hood-match mode, a bar-reach correction to the bar (`railClampCorrection`,
+`barClampCorrection`). The reverse direction has to take both off again — `targetsThatProduce`
+— or it is not the inverse of anything. It did not, at first, and nothing caught it: a frame on
+175 mm cranks against the fit bike's 170 came back with the saddle 5 mm out, and hood-match mode
+with a 75 mm bar against the fit bike's 100 came back 25 mm out, which the solver then answered
+with a much longer stem. The round-trip tests only covered clamp mode with matching cranks, so
+they were all passing. There are now three round trips through the corrections: cranks, hoods,
+and both at once with the rail offset off centre so nothing can cancel.
+
 Standover makes that answer a family rather than a single set of numbers: it translates
 both carriages together, so **every one of the eight positions has an exact set of
 readings**, and geometrically none is more correct than another. Something has to choose, so
@@ -170,6 +181,70 @@ labels landed on the same point. Its reach figures are to the bar *clamp*, with 
 a bar reach further forward, because that is the number you would compare against a bike you
 have measured.
 
+## Ranking the answers
+
+Every stem length is tried at every angle, both ways up, and each combination gets the spacer
+stack that lands closest. Ordering those is a judgement, not arithmetic, and the first attempt
+got it wrong: sorted purely by miss distance, the app would headline a 130 mm stem at −17° on
+37.5 mm of spacers over a 120 mm at −6° on 12.5 mm because it landed 0.15 mm closer. Nothing
+about that trade is real — 0.15 mm is far inside the uncertainty of the measurements it came
+from — and the extreme build handles differently.
+
+The order is now:
+
+1. **buildable** — no negative spacers, fits the steerer
+2. **inside the limits on the form** — stem length range, maximum angle
+3. **inside the match tolerance**
+4. among those, the **least extreme**: flattest stem, then fewest spacers, then closest
+
+Outside the tolerance the miss leads again, because then it is what separates them.
+
+Two consequences worth knowing. The **green verdict is `isRecommendable`**, not `isMatch`: a
+stem longer or steeper than you said you would fit is not an answer to the question you asked,
+however close it lands, so the chip stays neutral and says "outside your limits". And **the
+headline need not be the build the bike is wearing**, even right after applying the reverse
+direction's readings — anything inside the band is equally on target, so it offers the flattest
+one. Close the tolerance down to check the geometry inverted; open it up to see what you would
+actually build.
+
+The spacer stack is **clamped into the buildable range** rather than reported outside it.
+Rounding to the nearest spacer could push a stack past the end of the steerer — 33.5 mm wanted
+with 33 mm of room rounds to 35 with 5 mm spacers — and the whole combination was then thrown
+out as unreachable, even though 30 mm was buildable and only 3.5 mm off. Same at the bottom: a
+target a millimetre below slammed is a millimetre off with no spacers, not impossible.
+`needsNegativeSpacers` and `overSpacerRoom` now allow half a spacer of slack each, which is
+what rounding can cost, and only fire when the demand is genuinely outside what the bike can do.
+
+## What the model does not know
+
+Worth being explicit, because the answers look more precise than the inputs are:
+
+- **Saddle height is measured along the seat axis**, the way a tape run up the seat tube
+  measures it — so the same contact point reads differently on two frames with different seat
+  angles, and that is the convention rather than a bug. What actually gets matched between bikes
+  is the *rail position*, which needs no convention at all; the height is only how that position
+  is expressed on each frame. If you measure yours some other way — straight from the BB to the
+  middle of the saddle top, say — the two numbers will not agree once the saddle is far off the
+  axis.
+- **Saddle tilt is not modelled**, and neither is the fore/aft distance from rail centre to
+  whatever point on the saddle top you measure to. `railsBelowSaddleTop` is a single vertical
+  drop.
+- **Hood position is horizontal only.** A bar's reach is carried, its drop is not, and bar
+  rotation and lever position are not in the model at all.
+- **Every stem is assumed to have the frame's `stemClampHeight`**, and the fit bike's own stem
+  height is a separate field. Swapping to a stem with a different clamp height changes the answer
+  by half the difference.
+- Not modelled at all: manufacturer spacer limits, integrated cockpits, seatpost insertion
+  minimums, pedal stack, and how a very long or very steep stem changes the way a bike handles.
+
+And the one thing the test suite cannot tell you: **every check in it is internally consistent.**
+The front-end correction is verified against the same arithmetic the implementation uses, which
+proves the two directions agree but not that the measured zero point needs that correction. The
+decisive check is a tape measure: set the bike to the readings on the form, measure BB to bar
+clamp in x and y, and compare with the "Bar clamp X/Y" cells in section 1. If those agree, the
+84.5 mm forward and 30.4 mm up are real; if they are out by roughly that much, the front end is
+being counted twice.
+
 ## Rendering
 
 The whole page is redrawn on every keystroke. It is a small page, and one code path from
@@ -208,7 +283,11 @@ Names used throughout, in case a term is unfamiliar:
 | `asBuiltOverflowsSteerer` | The bike's own build does not fit in its own exposed steerer, so one of the three numbers is wrong. Said out loud on both fields rather than left to show up as missing options. |
 | `exactSpacerHeight` | What the steerer axis wants before rounding to whole spacers. Negative means the front end is already too tall. |
 | `missMm` | Straight-line distance from where the bar clamp lands to where it should be. |
-| `reachable` | The solution needs no negative spacers and no more than `spacerRoom` allows. |
+| `reachable` | The solution needs no negative spacers and no more than `spacerRoom` allows, each with half a spacer of slack for rounding. What the *bike* can do. |
+| `withinLimits` | No stem length or angle warning: what *you said you would fit*. Ranked below `reachable` and above the tolerance, because the bike's limits are harder than yours. |
+| `insideTolerance` | Miss is within `toleranceMm`. Everything inside it is treated as equally on target, so the ranking is free to prefer the least extreme build. |
+| `isRecommendable` | `isMatch` and `withinLimits`. What the green chip means. |
+| `overSpacerRoom` | Wants more spacer than the steerer has, by more than rounding explains. Distinct from a stack that merely got clamped. |
 | `mastMaxReading` / `slideMaxReading` | How far a scale actually goes, in scale units — the top of the seatpost mast's travel, the front column's rise, and the same for the two horizontal slides. **0 means not measured**, and is treated as no upper limit rather than as a zero-length scale. |
 | `needsNegativeSpacers` | The bar would have to sit below the frame's own slammed height. Not a build, so the stem table leaves these out entirely rather than printing a negative spacer stack. If a frame has nothing left, the card says how far above the target its closest option still sits. The model keeps them — the ranking already sorts them last — so only the display filters. |
 | `railClamp` | Where the saddle's rails sit — the point both sides match. On a frame it is the post's clamp axis shifted back by `railOffset`; on the fit bike it is the saddle carriage shifted back by `saddleRailOffset`. |
@@ -230,7 +309,7 @@ python3 -m http.server 8000
 # then open http://localhost:8000/tests/
 ```
 
-It runs all three suites and prints a tally (344 checks at the time of writing). Each
+It runs all three suites and prints a tally (435 checks at the time of writing). Each
 suite is also a standalone page if you want to read one in isolation.
 
 | Suite | Covers |

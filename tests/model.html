@@ -13,7 +13,10 @@ import { carriagePosition, carriageReadings, targetPositions, standoverOffsetFor
          barOffsetFor, barClampOffset, standoverTravelFor, scaleLimit, readingOnScale } from '../js/model/fit-bike.js';
 import { trainerSetups, lowestStandoverSetup } from '../js/model/reverse.js';
 import { standoverOffset, STANDOVER_POSITIONS } from '../js/model/standover.js';
-import { stemSolutions, bestStemSolution, saddleSetup, targetBarClamp, targetRailClamp, fitSpacerHeight, needsNegativeSpacers } from '../js/model/solver.js';
+import { subtract } from '../js/lib/vector.js';
+import { stemSolutions, bestStemSolution, saddleSetup, targetBarClamp, targetRailClamp, fitSpacerHeight,
+         needsNegativeSpacers, overSpacerRoom, isRecommendable, barClampCorrection,
+         railClampCorrection } from '../js/model/solver.js';
 
 const log = [];
 let failures = 0;
@@ -159,6 +162,12 @@ Object.assign(frame, { stack: 570, reach: 385, headTubeAngle: 72.5, seatTubeAngl
 const buildable = barClampPosition(frame, 25, 100, -6);
 aimCarriageAt('bar', buildable);
 
+// With the everyday 4mm tolerance the ranking deliberately treats everything inside it as
+// equally on target and picks the least extreme build, so the exact answer is not necessarily
+// the headline - that is section 2b. Here the question is whether the geometry can be inverted
+// at all, so the band is closed down to nothing first.
+state.options.toleranceMm = 0.01;
+
 const best = bestStemSolution(frame);
 near('recovers the stem length', best.stemLength, 100);
 near('recovers the stem angle', best.stemAngle, -6);
@@ -186,18 +195,31 @@ check('exactly filling the steerer still counts as fitting',
       asBuiltOverflowsSteerer({ ...frame, exposedSteerer: 65, builtSpacerHeight: 25 }) === false);
 frame.exposedSteerer = 80;
 
+state.options.toleranceMm = 4;
+
 // Every solution's dx/dy must agree with its own miss distance.
 const allAgree = stemSolutions(frame).every(s =>
   Math.abs(Math.hypot(s.dx, s.dy) - s.missMm) < 1e-9);
 check('miss distance always equals hypot(dx, dy)', allAgree);
 
-// Ranking: reachable first, then by miss.
+// Ranking: buildable first, then inside your limits, then inside the tolerance.
 const ranked = stemSolutions(frame);
 const firstUnreachable = ranked.findIndex(s => !s.reachable);
 check('reachable solutions all sort ahead of unreachable ones',
   firstUnreachable === -1 || ranked.slice(firstUnreachable).every(s => !s.reachable));
-check('reachable solutions are ordered by miss',
-  ranked.filter(s => s.reachable).every((s, i, arr) => i === 0 || arr[i - 1].missMm <= s.missMm + 1e-12));
+check('and everything inside your limits sorts ahead of anything outside them',
+  ranked.filter(s => s.reachable).every((s, i, arr) => i === 0 || arr[i - 1].withinLimits >= s.withinLimits));
+check('matches sort ahead of near misses',
+  ranked.filter(s => s.reachable && s.withinLimits)
+        .every((s, i, arr) => i === 0 || arr[i - 1].insideTolerance >= s.insideTolerance));
+const inBand = ranked.filter(s => s.reachable && s.withinLimits && s.insideTolerance);
+check('inside the band the flattest stem comes first, then the fewest spacers',
+  inBand.every((s, i, arr) => i === 0 ||
+    Math.abs(arr[i - 1].stemAngle) < Math.abs(s.stemAngle) ||
+    (Math.abs(arr[i - 1].stemAngle) === Math.abs(s.stemAngle) && arr[i - 1].spacerHeight <= s.spacerHeight)));
+check('outside the band the closest comes first',
+  ranked.filter(s => s.reachable && s.withinLimits && !s.insideTolerance)
+        .every((s, i, arr) => i === 0 || arr[i - 1].missMm <= s.missMm + 1e-12));
 
 // Spacers are quantised, never negative, and a too-tall front end is flagged.
 reset();
@@ -229,6 +251,89 @@ check('more spacers raises the bar', high[1] > low[1]);
 check('and brings it back, along the steerer', high[0] < low[0]);
 near('the bar moves exactly along the steerer axis',
   (high[0] - low[0]) / (high[1] - low[1]), steererUp(frame.headTubeAngle)[0] / steererUp(frame.headTubeAngle)[1], 1e-9);
+
+/* ======= 2b. the ranking prefers a sane build over a fractionally closer one ======= */
+// Sorting by miss alone would headline a very long stem at a very steep angle on a tower of
+// spacers to gain a fraction of a millimetre on something ordinary - a trade far inside the
+// uncertainty of the measurements it came from.
+log.push('== ranking');
+reset();
+const ranking = createFrame('Ranking', '56');
+Object.assign(ranking, { stack: 570, reach: 385, headTubeAngle: 72.5, exposedSteerer: 120 });
+state.frames = [ranking];
+// A target the catalogue can reach several ways: aim at a middling build.
+aimCarriageAt('bar', barClampPosition(ranking, 20, 100, 0));
+
+const options = stemSolutions(ranking);
+const headline = options[0];
+const band = options.filter(s => s.reachable && s.withinLimits && s.insideTolerance);
+check('several builds land inside the 4mm tolerance', band.length > 1);
+note('inside the band', band.map(s => `${s.stemLength}x${s.stemAngle}/${s.spacerHeight} miss ${s.missMm.toFixed(2)}`));
+check('the headline is one of them', band.includes(headline));
+check('and it is the flattest stem in the band',
+      band.every(s => Math.abs(headline.stemAngle) <= Math.abs(s.stemAngle)));
+check('with the fewest spacers among those',
+      band.filter(s => Math.abs(s.stemAngle) === Math.abs(headline.stemAngle))
+          .every(s => headline.spacerHeight <= s.spacerHeight));
+const closerButSteeper = band.find(s => Math.abs(s.stemAngle) > Math.abs(headline.stemAngle) && s.missMm < headline.missMm);
+check('even when something steeper lands marginally closer', !closerButSteeper || closerButSteeper !== headline);
+if (closerButSteeper)
+  note('passed over', `${closerButSteeper.stemLength}x${closerButSteeper.stemAngle}/` +
+       `${closerButSteeper.spacerHeight} miss ${closerButSteeper.missMm.toFixed(2)}`);
+
+// The limits on the form are limits, not footnotes: a stem outside them cannot be the green
+// answer however close it lands, and anything inside them ranks ahead of it.
+state.options.stemLengths = '100,130';
+state.options.stemAngles = '0';
+state.options.maxStemLength = 110;
+aimCarriageAt('bar', barClampPosition(ranking, 20, 130, 0));
+const limited2 = stemSolutions(ranking);
+check('the 130mm stem is the one that actually hits the target',
+      Math.abs(limited2.find(s => s.stemLength === 130).missMm) < 0.01);
+check('but it is not offered first, being over the limit you set', limited2[0].stemLength === 100);
+check('and it is not recommendable', isRecommendable(limited2.find(s => s.stemLength === 130)) === false);
+check('while it is still marked buildable and inside the tolerance',
+      limited2.find(s => s.stemLength === 130).reachable === true &&
+      limited2.find(s => s.stemLength === 130).insideTolerance === true);
+check('and it still says why', limited2.find(s => s.stemLength === 130).warnings.join() === 'stem over 110mm');
+
+/* ======= 2c. the spacer stack is clamped to what the steerer can take ======= */
+// Rounding to the nearest spacer used to be able to push a stack past the end of the steerer
+// and the whole answer was then thrown out, even though the stack below it was buildable and
+// well inside tolerance.
+log.push('== spacer boundary');
+reset();
+const boundary = createFrame('Boundary', '56');
+Object.assign(boundary, { stack: 570, reach: 385, headTubeAngle: 72.5, stemClampHeight: 40, exposedSteerer: 73 });
+state.frames = [boundary];
+state.options.spacerStep = 5;
+near('33mm of spacer room', spacerRoom(boundary), 33, 1e-9);
+
+const wantsThirtyThreeAndAHalf = fitSpacerHeight(boundary, 100, -6, barClampPosition(boundary, 33.5, 100, -6));
+near('the exact demand is 33.5mm', wantsThirtyThreeAndAHalf.exactSpacerHeight, 33.5, 1e-6);
+near('so the stack offered is the 30mm one that fits', wantsThirtyThreeAndAHalf.spacerHeight, 30, 1e-9);
+near('which is 3.5mm off, inside the 4mm tolerance', wantsThirtyThreeAndAHalf.missMm, 3.5, 0.05);
+aimCarriageAt('bar', barClampPosition(boundary, 33.5, 100, -6));
+const boundarySolution = stemSolutions(boundary).find(s => s.stemLength === 100 && s.stemAngle === -6);
+check('and it is a real option rather than being ruled out', boundarySolution.reachable === true);
+check('with nothing to warn about', boundarySolution.warnings.length === 0);
+
+// A target below the frame's own slammed height, by less than rounding would explain, is a
+// build with no spacers rather than an impossibility.
+const justBelowSlammed = fitSpacerHeight(boundary, 100, -6, barClampPosition(boundary, -1, 100, -6));
+near('a millimetre below slammed', justBelowSlammed.exactSpacerHeight, -1, 1e-6);
+near('is a no-spacer build', justBelowSlammed.spacerHeight, 0, 1e-12);
+check('not a negative one', needsNegativeSpacers(justBelowSlammed) === false);
+near('and it is only a millimetre out', justBelowSlammed.missMm, 1, 0.05);
+
+// Far past either end is still ruled out, so the flag keeps its meaning.
+const wayTooTall = fitSpacerHeight(boundary, 100, -6, barClampPosition(boundary, -30, 100, -6));
+check('a target well below slammed still needs negative spacers', needsNegativeSpacers(wayTooTall) === true);
+const wayTooHigh = fitSpacerHeight(boundary, 100, -6, barClampPosition(boundary, 60, 100, -6));
+check('and one well above the steerer is still over the limit',
+      overSpacerRoom(boundary, wayTooHigh) === true);
+near('while the stack it reports is the tallest that fits', wayTooHigh.spacerHeight, 30, 1e-9);
+state.options.spacerStep = 2.5;
 
 /* ================ 3. saddle round trip ================ */
 log.push('== saddle');
@@ -397,6 +502,77 @@ check('and refuses one past a measured maximum',
       readingOnScale(state.carriages.saddle, 'mast', 20.1) === false);
 check('but accepts the maximum itself',
       readingOnScale(state.carriages.saddle, 'mast', 20) === true);
+
+/* ======= 5b. the corrections have to be inverted too ======= */
+// The forward direction does not aim a frame at the fit bike's target points directly: it adds a
+// crank-length correction to the saddle and, in hood-match mode, a bar-reach correction to the
+// bar. The reverse direction therefore has to take both off, or it is not the inverse of
+// anything. It used to skip that, and applying its readings landed the saddle 5mm out on a frame
+// with different cranks and the bar 25mm out in hood mode.
+log.push('== reverse with corrections');
+
+/** Read the setups back out and check the forward direction lands on the bike as built. */
+function roundTripThroughCorrections(label, frame) {
+  const built = asBuiltPositions(frame, state.fitBike.railsBelowSaddleTop);
+  for (const setup of trainerSetups(frame)) {
+    state.readings = { ...setup };
+    near(`${label}: standover ${setup.standover} lands on the rails`,
+         Math.hypot(...subtract(targetRailClamp(frame), built.saddle)), 0, 1e-6);
+    near(`${label}: standover ${setup.standover} lands on the bar clamp`,
+         Math.hypot(...subtract(targetBarClamp(frame), built.bar)), 0, 1e-6);
+  }
+
+  // And the answers the card prints, which is what you would actually act on.
+  state.readings = { ...trainerSetups(frame)[0] };
+  near(`${label}: the saddle height comes back`, saddleSetup(frame).heightAlongSeatAxis, frame.builtSaddleHeight, 1e-6);
+  near(`${label}: and the rail offset`, saddleSetup(frame).railOffset, frame.builtRailOffset, 1e-6);
+  state.options.toleranceMm = 0.01;
+  const solved = bestStemSolution(frame);
+  check(`${label}: and the stem it is already wearing`,
+        solved.stemLength === frame.builtStemLength &&
+        Math.abs(solved.stemAngle - frame.builtStemAngle) < 1e-9 &&
+        Math.abs(solved.spacerHeight - frame.builtSpacerHeight) < 1e-9);
+  state.options.toleranceMm = 4;
+}
+
+// A frame on longer cranks than the fit bike: the saddle target moves down, so the readings have
+// to be the ones that put it back up.
+reset();
+const cranked = createFrame('Cranked', '56');
+Object.assign(cranked, { crankLength: 175, builtSaddleHeight: 700, builtRailOffset: 0 });
+state.frames = [cranked];
+state.fitBike.crankLength = 170;
+state.carriages.saddle.mastMaxReading = 0;
+state.carriages.bar.mastMaxReading = 0;
+check('the crank correction brings the saddle down 5mm, or this proves nothing',
+      Math.abs(railClampCorrection(cranked)[1] + 5) < 1e-9);
+roundTripThroughCorrections('175mm cranks', cranked);
+
+// Hood-match mode with a shorter-reach bar on the frame: the clamp target moves forward.
+reset();
+const hooded = createFrame('Hooded', '56');
+Object.assign(hooded, { barReach: 75 });
+state.frames = [hooded];
+state.fitBike.matchMode = 'hoods';
+state.fitBike.barReach = 100;
+state.carriages.saddle.mastMaxReading = 0;
+state.carriages.bar.mastMaxReading = 0;
+check('the bar reach correction is 25mm, or this proves nothing',
+      Math.abs(barClampCorrection(hooded)[0] - 25) < 1e-9);
+roundTripThroughCorrections('hood match', hooded);
+
+// Both at once, and with the rail offset off centre, so nothing can cancel.
+reset();
+const both = createFrame('Both', '56');
+Object.assign(both, { crankLength: 165, barReach: 120, builtRailOffset: 8, builtStemAngle: 6 });
+state.frames = [both];
+state.fitBike.matchMode = 'hoods';
+state.fitBike.saddleRailOffset = 12;
+state.carriages.saddle.mastMaxReading = 0;
+state.carriages.bar.mastMaxReading = 0;
+roundTripThroughCorrections('both corrections', both);
+
+reset();
 
 // With the machine's own measured maximums in place, the 70mm handlebar scale is what does
 // the ruling out: at position A the bar cannot get high enough for an ordinary frame, so the
