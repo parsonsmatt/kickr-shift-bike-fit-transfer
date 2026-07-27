@@ -10,6 +10,14 @@ Scale travel:
 - Max handlebar stack: 70mm (scale reads 0 to 7.0)
 - Fore/aft and reach slides: not measured yet
 
+Front end (holds only while the stock stem and bar are on it):
+
+- Stem: 90mm, -7 degrees (bar clamp sits ahead of the column, not on it)
+- Stem height: 40mm, on a clamp: 55mm of clamp and stem standing off the column
+- The 770mm column height above is measured to the top of that clamp, so the bar
+  clamp centre is 20mm further up the column and then a stem length forward
+- Bar reach, clamp to hoods: 100mm
+
 Saddle (holds only while this saddle is on the bike):
 
 - Rail centre to saddle top: 40mm

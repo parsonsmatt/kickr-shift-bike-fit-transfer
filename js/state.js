@@ -30,16 +30,18 @@ export function defaultState() {
 
     // Sample readings, not measured constants: they are the setup that reproduces the
     // default frame's own "as currently built" figures, so a fresh page shows a working
-    // answer rather than a frame nothing in the catalogue can reach. Position D because the
+    // answer rather than a frame nothing in the catalogue can reach. Position C because the
     // handlebar scale only has 70mm of travel - the standover rise is the coarse stack
-    // adjustment, and at A the bar cannot get high enough for most frames. The two saddle
-    // numbers depend on railsBelowSaddleTop, so they moved when that was measured.
+    // adjustment, and below C the bar cannot get high enough for this frame. All four numbers
+    // depend on measurements outside them - the saddle pair on railsBelowSaddleTop, the bar
+    // pair on the front end above the carriage zero - so all four moved as those were pinned
+    // down. They are whatever the reverse direction says, not hand-picked.
     readings: {
-      standover: 'D',
-      saddleHeight: 10.0,
+      standover: 'C',
+      saddleHeight: 12.0,
       saddleForeAft: 4.8,
-      barHeight: 5.9,
-      barReach: 14.5,
+      barHeight: 5.5,
+      barReach: 5.8,
     },
 
     // Measured off the bike, in constants.txt. Floor measurements are converted to the
@@ -89,6 +91,14 @@ export function defaultState() {
       // frame's builtRailOffset: positive is back. 0 means clamped at rail centre, which is
       // what the app assumed before this existed.
       saddleRailOffset: 0,
+      // The fit bike's front end, which the bar carriage's zero point sits below and behind:
+      // the zero is measured to the top of the clamp the stem sits on, and the bar clamp centre
+      // is half a stem height up the column from there and then a stem length forward. Clamp
+      // and stem together stand 55mm above the column, of which the stem is 40mm. Angle is
+      // measured off perpendicular to the column, the way stems are labelled.
+      stemLength: 90, // the stock Kickr stem
+      stemAngle: -7,
+      stemHeight: 40,
       barReach: 100, // the stock Kickr bar
       matchMode: 'clamp', // 'clamp' = same bar on both bikes, 'hoods' = correct for bar reach
     },

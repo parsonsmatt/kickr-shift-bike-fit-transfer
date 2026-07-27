@@ -53,7 +53,7 @@
     </div>
 
     <h3 style="margin-top:16px">Current setup</h3>
-    <div class="grid cols6" style="gap:0 12px">
+    <div class="grid cols3" style="gap:0 12px">
       <div class="field"><label>Crank length (mm)</label>
         <select data-fit-bike="crankLength">
           <option value="165">165</option><option value="167.5">167.5</option>
@@ -73,6 +73,19 @@
       <div class="field"><label>Saddle back on its rails (mm)</label>
         <input type="text" inputmode="decimal" data-fit-bike="saddleRailOffset">
         <div class="hint" data-hint-for="saddleRailOffset"></div></div>
+      <div class="field"><label>Stem length (mm)</label>
+        <input type="text" inputmode="decimal" data-fit-bike="stemLength">
+        <div class="hint">The fit bike's own stem &mdash; stock is 90&nbsp;mm. The bar carriage's zero
+          point is measured to the <i>column</i>, and this is what carries the bar clamp forward of
+          it, so it comes off every frame's stem length at full size.</div></div>
+      <div class="field"><label>Stem height (mm)</label>
+        <input type="text" inputmode="decimal" data-fit-bike="stemHeight">
+        <div class="hint">The stem's own height, 40&nbsp;mm stock. Its centre &mdash; where the bar
+          clamps &mdash; is half that up the column from the zero point, which is measured to the top
+          of the clamp the stem sits on. Clamp and stem together stand 55&nbsp;mm off the column.</div></div>
+      <div class="field"><label>Stem angle (deg)</label>
+        <input type="text" inputmode="decimal" data-fit-bike="stemAngle">
+        <div class="hint" data-hint-for="fitStem"></div></div>
       <div class="field"><label>Bar reach (mm)</label>
         <input type="text" inputmode="decimal" data-fit-bike="barReach">
         <div class="hint">The stock bar is 100&nbsp;mm. Only used in hood-match mode.</div></div>
@@ -200,6 +213,7 @@
     <p><b>Headset stack.</b> Frame stack is measured to the top of the head tube, but spacers start on top of the upper headset cover. That cover is 5&ndash;20&nbsp;mm depending on the frame and it moves the answer by exactly its own height. It is per-frame and defaults to 15&nbsp;mm.</p>
     <p><b>Stem stack height.</b> Stem angle is measured from perpendicular to the steerer, and the stem's clamp is roughly 40&nbsp;mm tall, so half of it is added above the spacers to reach the bar clamp centreline.</p>
     <p><b>Saddle height across seat angles.</b> The same saddle position produces a different saddle height number on a frame with a different seat angle. The per-frame figure is recomputed along that frame's own axis rather than carried across.</p>
+    <p><b>Both bikes have a front end.</b> The fit bike's bar carriage zero is measured to the column, at the top of the clamp the stem sits on &mdash; not to the bar clamp. Getting from one to the other is the same two moves as on a frame: half the stem's height up the column, then a stem length forward. Stock, that is 20&nbsp;mm up a 76&deg; column and then 90&nbsp;mm at &minus;7&deg;, which lands the bar clamp about 84&nbsp;mm ahead of the zero point and 30&nbsp;mm above it. That offset is part of where your hands are, so it is part of what a frame has to reproduce &mdash; leave it out and every stem answer comes back roughly a stem length short. Change the fit bike's stem and every frame's answer moves with it.</p>
     <p><b>One saddle everywhere.</b> Rail drop and nose-to-rail are single figures shared by the fit bike and every frame, so the whole page assumes you move one saddle between them. That is what makes matching the rails the right thing to match. Run a different saddle on the target bike and the rails still land where they should, but its top sits higher or lower by the difference in shell stack &mdash; add that difference to the saddle height you dial in, since nothing here knows about it.</p>
     <p><b>Saddle height.</b> Every saddle height on this page &mdash; the per-frame figure, the compare column and the <i>as built</i> input &mdash; is measured from the bottom bracket to the <b>top of the saddle</b>, along that frame's own seat axis. Not to the rails.</p>
     <p><b>Saddle position.</b> The fit bike's saddle carriage locates the <i>clamp</i>, but what gets reproduced on a real frame is where the saddle ends up &mdash; its rail centre. Those are the same point only when the saddle is clamped at rail centre, so if it is slid back on the fit bike, say so above: the whole offset comes straight off every frame's saddle answer. Run the saddle you actually ride either way.</p>

@@ -21,7 +21,8 @@
 // Which way along a slide a *bigger* reading travels is carried by the sign of the
 // mm-per-unit, never by the angle. A scale that counts the other way gets a negative gain.
 
-import { unitVectorAt, magnitude, describeDirection } from '../lib/vector.js';
+import { unitVectorAt, magnitude, describeDirection, DEGREES } from '../lib/vector.js';
+import { steererUp } from './frame.js';
 import { oneDecimal } from '../lib/format.js';
 import { state } from '../state.js';
 import { standoverOffset, standoverTravel, normaliseStandover } from './standover.js';
@@ -134,15 +135,13 @@ export function carriageReadings(carriage, position, offset = [0, 0]) {
  * The two points to reproduce on a real frame, from the readings currently entered: the
  * centre of the saddle's rails and the bar clamp centre.
  *
- * Both carriages take the standover rise. The saddle carriage takes one thing more — see
- * `saddleOffsetFor`.
+ * Neither carriage locates its point directly — see `saddleOffsetFor` and `barOffsetFor`.
  */
 export function targetPositions() {
   const { readings, carriages } = state;
-  const rise = standoverOffsetFor(readings.standover);
   return {
     saddle: carriagePosition(carriages.saddle, readings.saddleHeight, readings.saddleForeAft, saddleOffsetFor(readings.standover)),
-    bar: carriagePosition(carriages.bar, readings.barHeight, readings.barReach, rise),
+    bar: carriagePosition(carriages.bar, readings.barHeight, readings.barReach, barOffsetFor(readings.standover)),
   };
 }
 
@@ -171,6 +170,55 @@ export const saddleOffsetFor = letter => {
   const rise = standoverOffsetFor(letter);
   return [rise[0] - state.fitBike.saddleRailOffset, rise[1]];
 };
+
+/**
+ * From the bar carriage's zero point to the bar clamp centre.
+ *
+ * The fit bike's front end is built like any other bike's: the column has a clamp on it, the
+ * stem sits on that clamp, and the bar is a stem length in front. The zero point is measured
+ * to the top of that clamp, so getting to the bar clamp centre is two moves - half the stem's
+ * height up the column, then along the stem - which is exactly what `barClampPosition` does to
+ * a frame. Both use the same angle convention, so a stem that reads level on one reads level on
+ * the other, and the column plays the part of the head tube.
+ *
+ * None of this was here at first, and it is not a detail: the carriage zero is a good 90mm
+ * behind and 30mm below where the hands actually are, so every frame's answer came back about a
+ * stem length short.
+ */
+export function barClampOffset() {
+  const { stemLength, stemAngle, stemHeight } = state.fitBike;
+  const columnAngle = state.carriages.bar.mastAngle;
+  const up = steererUp(columnAngle);
+  const bearing = (90 - columnAngle + stemAngle) * DEGREES;
+  return [
+    (stemHeight / 2) * up[0] + stemLength * Math.cos(bearing),
+    (stemHeight / 2) * up[1] + stemLength * Math.sin(bearing),
+  ];
+}
+
+/**
+ * The bar carriage's offset: the standover rise, plus the front end above and ahead of it.
+ *
+ * Folded into the offset that `carriagePosition` and `carriageReadings` both take, so the
+ * forward and reverse directions cannot disagree about it - same reason as `saddleOffsetFor`.
+ */
+export const barOffsetFor = letter => {
+  const rise = standoverOffsetFor(letter);
+  const front = barClampOffset();
+  return [rise[0] + front[0], rise[1] + front[1]];
+};
+
+/** The whole front end in one sentence, for the hint under the stem angle. */
+export function describeFrontEnd() {
+  const { stemLength, stemAngle, stemHeight } = state.fitBike;
+  const offset = barClampOffset();
+  return (
+    `${oneDecimal(stemLength)}mm at ${oneDecimal(stemAngle)} deg, on a ${oneDecimal(stemHeight)}mm ` +
+    `stem whose centre is ${oneDecimal(stemHeight / 2)}mm up the ` +
+    `${oneDecimal(state.carriages.bar.mastAngle)} degree column: the bar clamp ends up ` +
+    `${oneDecimal(offset[0])}mm ahead of the zero point and ${oneDecimal(offset[1])}mm above it.`
+  );
+}
 
 export const activeStandover = () => normaliseStandover(state.readings.standover);
 

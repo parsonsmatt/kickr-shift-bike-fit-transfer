@@ -48,16 +48,19 @@ try {
   note('saddle clamp Y', [before[2], after[2]]);
 
   /* ---- 2. standover select lifts both carriages ---- */
-  // From A deliberately: the default is D now, so picking D would move nothing.
+  // From A deliberately: the default is C now, so starting where the page starts would leave
+  // the first pick doing nothing.
   pick($('[data-reading="standover"]'), 'A');
-  const barTargetBeforeRise = $$('#target-readout .v')[3].textContent;
+  // Strip order: standover rise, saddle X, saddle Y, front end, bar X, bar Y, ...
+  const barTargetBeforeRise = $$('#target-readout .v')[4].textContent;
   pick($('[data-reading="standover"]'), 'D');
   // Three letters at 20mm along an axis leaning 4 degrees back: 59.9 up, 4.2 back.
   check('standover rise is 60mm up', $$('#target-readout .v')[0].textContent, '60');
   check('standover rise reports its setback', /4\.2 back \| position D/.test($$('#target-readout div')[0].textContent), true);
   check('standover hint spells out up and back', /D moves both reach\/setback masts 60\.0mm along the rise axis: 59\.9mm up, 4\.2mm back/.test($('[data-hint-for="standover"]').textContent), true);
+  // Both figures are printed to one decimal, so their difference can be a rounding step out.
   check('rise moved the bar target back too',
-        Math.abs(Number(barTargetBeforeRise) - Number($$('#target-readout .v')[3].textContent) - 4.2) < 0.05, true);
+        Math.abs(Number(barTargetBeforeRise) - Number($$('#target-readout .v')[4].textContent) - 4.2) < 0.15, true);
   pick($('[data-reading="standover"]'), 'A');
   check('back at A the rise is zero', $$('#target-readout .v')[0].textContent, '0');
   check('A described as the reference', /A is the reference position/.test($('[data-hint-for="standover"]').textContent), true);
@@ -100,7 +103,8 @@ try {
 
   /* ---- 2d. the promoted setup fields are on the form, outside the constants panel ---- */
   check('constants panel starts closed', $('#constants-details').open, false);
-  for (const field of ['crankLength', 'railsBelowSaddleTop', 'noseToRailCentre', 'barReach', 'matchMode']) {
+  for (const field of ['crankLength', 'railsBelowSaddleTop', 'noseToRailCentre', 'barReach',
+                       'stemLength', 'stemAngle', 'stemHeight', 'matchMode']) {
     const node = $(`[data-fit-bike="${field}"]`);
     check(`${field} is visible without opening the constants panel`,
           !!node && !node.closest('details'), true);
@@ -139,6 +143,42 @@ try {
           .test($('[data-hint-for="saddleRailOffset"]').textContent), true);
   type(railOffsetField, '0');
   check('back to centre restores the target', Math.abs(saddleTargetX() - centredTargetX) < 0.05, true);
+
+  /* ---- 2f. the fit bike's own front end ---- */
+  // The bar carriage's zero is on the column, below and behind the bar clamp. Every millimetre
+  // of that lands on the frame's stem length, so it is on the form rather than buried, and the
+  // hint has to print what the three numbers currently amount to.
+  const barTargetAt = () => Number($$('#target-readout .v')[4].textContent);
+  const frontEndX = () => Number($$('#target-readout .v')[3].textContent);
+  // Fourth cell of the frame card's stem readout is the answer's stem length; find it instead
+  // through the compare table, which is stable.
+  const solvedStem = () => $$('#compare-table tbody tr')[0].children[6].textContent;
+  check('the front end is shown in the target strip', frontEndX() > 80, true);
+  check('and the hint spells out both moves',
+        /on a 40\.0mm stem whose centre is 20\.0mm up the 76\.0 degree column/
+          .test($('[data-hint-for="fitStem"]').textContent), true);
+  check('stock stem length', $('[data-fit-bike="stemLength"]').value, '90');
+  check('stock stem angle', $('[data-fit-bike="stemAngle"]').value, '-7');
+  check('stock stem height', $('[data-fit-bike="stemHeight"]').value, '40');
+
+  const stemmedTargetX = barTargetAt();
+  const stemmedAnswer = solvedStem();
+  type($('[data-fit-bike="stemLength"]'), '110');
+  check('a longer stem on the fit bike moves the bar target forward with it',
+        Math.abs(barTargetAt() - stemmedTargetX - 20 * Math.cos(7 * Math.PI / 180)) < 0.15, true);
+  check('and the frame is asked for a longer stem too',
+        Number(solvedStem().replace('mm', '')) > Number(stemmedAnswer.replace('mm', '')), true);
+  type($('[data-fit-bike="stemLength"]'), '0');
+  type($('[data-fit-bike="stemHeight"]'), '0');
+  check('with no front end at all the target falls back onto the carriage zero',
+        Math.abs(frontEndX()) < 0.05, true);
+  check('which is a good 80mm behind where the hands actually are',
+        stemmedTargetX - barTargetAt() > 80, true);
+  type($('[data-fit-bike="stemLength"]'), '90');
+  type($('[data-fit-bike="stemHeight"]'), '40');
+  check('and putting the stock front end back restores the target',
+        Math.abs(barTargetAt() - stemmedTargetX) < 0.05, true);
+  check('and the answer', solvedStem(), stemmedAnswer);
 
   /* ---- 3. state is persisted, in the new schema ---- */
   await sleep(400);
@@ -241,7 +281,7 @@ try {
   check('two frames after removing one', $('#frame-list').children.length, 2);
 
   /* ---- 12. hood match mode shifts the bar target ---- */
-  const barTargetX = () => $$('#target-readout .v')[3].textContent;
+  const barTargetX = () => $$('#target-readout .v')[4].textContent;
   const clampModeX = barTargetX();
   pick($('[data-fit-bike="matchMode"]'), 'hoods');
   type($('[data-fit-bike="barReach"]'), '95');
@@ -271,13 +311,13 @@ try {
 
   // The solved stem is the best option out of the catalogue, not what the bike is wearing.
   // Both are drawn, or the proposal reads as a description of the bike.
-  check('the drawing shows the build as it stands', /as built [0-9]+ x /.test(drawingText()), true);
+  check('the drawing shows the build as it stands', /as built: [0-9]+ x /.test(drawingText()), true);
   // The drawing follows the highlighted frame, which need not be the first card.
   cardButtons('Show in diagram')[0].click();
   type($('[data-path$=".builtStemLength"]'), '90');
   type($('[data-path$=".builtSpacerHeight"]'), '35');
   check('and follows the as-built figures when they change',
-        /as built 90 x [-0-9.]+, 35\.0mm spacers/.test(drawingText()), true);
+        /as built: 90 x [-0-9.]+, 35\.0mm spacers/.test(drawingText()), true);
 
   /* ---- 13. options feed the solver ---- */
   // A stack the fit bike can serve from position A: the handlebar scale only has 70mm of
@@ -299,8 +339,8 @@ try {
   /* ---- 14. reset ---- */
   $('#reset-all').click();
   check('reset leaves one default frame', $('#frame-list').children.length, 1);
-  check('reset restored default readings', $('[data-reading="saddleHeight"]').value, '10');
-  check('and the default standover position', $('[data-reading="standover"]').value, 'D');
+  check('reset restored default readings', $('[data-reading="saddleHeight"]').value, '12');
+  check('and the default standover position', $('[data-reading="standover"]').value, 'C');
 
   /* ---- 15. reverse: readings that set the fit bike up to match a real bike ---- */
   // Deliberately after the reset, so this runs on the measured constants and Frame A's

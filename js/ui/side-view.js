@@ -161,7 +161,9 @@ function drawFrontEnd(canvas, frame, solution) {
   canvas.text(
     stemMidpoint,
     `${whole(solution.stemLength)} x ${signedOneDecimal(solution.stemAngle)}`,
-    { dy: -12, fill: COLOUR.steerer, size: 13, anchor: 'middle' },
+    // Back and up off the stem's midpoint: a short stem puts the label's tail on the bar clamp
+    // ring otherwise.
+    { dx: -16, dy: -16, fill: COLOUR.steerer, size: 13, anchor: 'middle' },
   );
   canvas.text(spacersTop, `${oneDecimal(solution.spacerHeight)}mm spacers`, {
     dx: -12,
@@ -178,31 +180,33 @@ function drawFrontEnd(canvas, frame, solution) {
  * looks like a statement of fact rather than a proposal. Both stems from the same steerer,
  * and the gap between the two bar clamps is the change being asked for.
  */
-function drawAsBuilt(canvas, frame, railsBelowSaddleTop) {
+function drawAsBuilt(canvas, frame, railsBelowSaddleTop, solution) {
   const ghost = { stroke: COLOUR.dim, 'stroke-width': 3, 'stroke-dasharray': '5 4', opacity: 0.9 };
   const stemBase = steererPointAtBarHeight(frame, frame.builtSpacerHeight);
   const built = asBuiltPositions(frame, railsBelowSaddleTop);
 
   canvas.line(stemBase, built.bar, ghost);
   canvas.ring(built.bar, COLOUR.dim, 5);
-  // This label is long, and a tall build puts its clamp near the right-hand edge, so it flips
-  // to the other side of the ring rather than running off the canvas.
-  const roomOnTheRight = built.bar[0] < WORLD.xMax - 260;
-  canvas.text(
-    built.bar,
-    `as built ${whole(frame.builtStemLength)} x ${signedOneDecimal(frame.builtStemAngle)}, ` +
-      `${oneDecimal(frame.builtSpacerHeight)}mm spacers`,
-    {
-      dx: roomOnTheRight ? 12 : -12,
-      dy: roomOnTheRight ? 4 : -10,
-      anchor: roomOnTheRight ? 'start' : 'end',
-      fill: COLOUR.dim,
-      size: 11,
-    },
-  );
-
   canvas.ring(built.saddle, COLOUR.dim, 5);
   canvas.text(built.saddle, 'as built', { dx: -10, dy: -8, anchor: 'end', fill: COLOUR.dim, size: 10 });
+
+  // The numbers go up in the caption rather than beside the ring. When the answer happens to be
+  // what the bike already has - which is exactly what you get after applying the reverse
+  // direction's readings - the ghost lies under the solved stem, and two sets of labels on the
+  // same point were unreadable.
+  const sameAsDrawn =
+    solution &&
+    Math.abs(solution.stemLength - frame.builtStemLength) < 0.5 &&
+    Math.abs(solution.stemAngle - frame.builtStemAngle) < 0.5 &&
+    Math.abs(solution.spacerHeight - frame.builtSpacerHeight) < 0.5;
+
+  canvas.text(
+    [WORLD.xMin + 16, WORLD.yMax],
+    `as built: ${whole(frame.builtStemLength)} x ${signedOneDecimal(frame.builtStemAngle)}, ` +
+      `${oneDecimal(frame.builtSpacerHeight)}mm spacers` +
+      (sameAsDrawn ? ' - which is the option drawn, so the dashes sit under it' : ''),
+    { fill: COLOUR.dim, size: 11, dy: 16 },
+  );
 }
 
 /** Seat axis, saddle and the rail clamp under it. */
@@ -242,7 +246,7 @@ function drawSaddle(canvas, frame, saddle) {
  */
 function drawBarTarget(canvas, frame, target, { saddleTopY, noseX }) {
   canvas.ring(target, COLOUR.target);
-  canvas.text(target, 'target bar', { dx: -14, dy: 18, anchor: 'end', fill: COLOUR.target });
+  canvas.text(target, 'target bar', { dy: 30, anchor: 'middle', fill: COLOUR.target });
 
   const dashed = { stroke: COLOUR.target, 'stroke-width': 1, 'stroke-dasharray': '3 4' };
   canvas.line([noseX, saddleTopY], [target[0], saddleTopY], dashed);
@@ -288,10 +292,11 @@ export function renderSideView() {
   select('#side-view-label').textContent = frame.name + (frame.size ? ' - ' + frame.size : '');
 
   const saddle = saddleSetup(frame);
+  const solution = bestStemSolution(frame);
   drawMatchCaption(canvas, frame);
   // As built first, so the solved answer draws over it rather than under it.
-  drawAsBuilt(canvas, frame, state.fitBike.railsBelowSaddleTop);
-  drawFrontEnd(canvas, frame, bestStemSolution(frame));
+  drawAsBuilt(canvas, frame, state.fitBike.railsBelowSaddleTop, solution);
+  drawFrontEnd(canvas, frame, solution);
   const saddleOutline = drawSaddle(canvas, frame, saddle);
   drawBarTarget(canvas, frame, targetBarClamp(frame), saddleOutline);
 }

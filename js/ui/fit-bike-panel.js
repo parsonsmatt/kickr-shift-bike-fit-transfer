@@ -16,6 +16,8 @@ import {
   describeScaleUnit,
   describeMast,
   describeSlide,
+  describeFrontEnd,
+  barClampOffset,
   scaleLimit,
   travelPerUnit,
 } from '../model/fit-bike.js';
@@ -50,8 +52,11 @@ export function renderScaleHints() {
     `0 is straight up. Each letter then moves ${oneDecimal(perLetter[1])}mm up and ` +
     `${oneDecimal(-perLetter[0])}mm back.`;
 
-  // This one is worth more than a label, because it comes off every frame's answer at full
-  // size and there is nothing else on the page that would give away a wrong value.
+  // Both of these come off every frame's answer at full size, and nothing else on the page
+  // would give away a wrong value, so each says what it currently amounts to in millimetres.
+  select('[data-hint-for="fitStem"]').textContent =
+    'Measured off perpendicular to the column, the way stems are labelled, so a 0 still rises. ' +
+    describeFrontEnd();
   const railOffset = state.fitBike.saddleRailOffset;
   select('[data-hint-for="saddleRailOffset"]').textContent = !railOffset
     ? 'Clamped at rail centre. Measure from the rail centre to where the clamp actually grips - ' +
@@ -134,6 +139,11 @@ export function renderTargetReadout() {
     ),
     readoutCell('Saddle clamp X', oneDecimal(target.saddle[0]), 'mm from BB'),
     readoutCell('Saddle clamp Y', oneDecimal(target.saddle[1]), 'mm above BB'),
+    readoutCell(
+      'Front end',
+      oneDecimal(barClampOffset()[0]),
+      `mm ahead of the column zero, ${oneDecimal(barClampOffset()[1])} up`,
+    ),
     readoutCell('Bar clamp X', oneDecimal(target.bar[0]), 'mm ahead of BB'),
     readoutCell('Bar clamp Y', oneDecimal(target.bar[1]), 'mm above BB'),
     readoutCell('Saddle to bar', oneDecimal(target.bar[0] - target.saddle[0]), 'mm horizontal'),

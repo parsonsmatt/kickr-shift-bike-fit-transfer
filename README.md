@@ -39,6 +39,21 @@ position = zero + mastMmPerUnit  * mastReading  * mastDirection
 
 This bike's scales read in centimetres exactly, so every mm-per-unit is 10.
 
+Neither carriage locates the point the app actually matches, and both corrections are worth
+more than the match tolerance:
+
+- The **saddle** carriage locates the saddle *clamp*; what a frame has to reproduce is the
+  saddle's rail centre. `saddleRailOffset` is the gap.
+- The **bar** carriage's zero is on the front *column*, at the top of the clamp the stem sits
+  on. The bar clamp is half a stem height up the column from there and then a stem length
+  forward — the same two moves `barClampPosition` makes on a frame, with the column playing the
+  head tube. Stock (90 mm at −7° on a 40 mm stem, 76° column) that is 84.5 mm ahead of the zero
+  point and 30.4 mm above it. It was missing at first, and every frame's answer came back
+  about a stem length short of what would actually reproduce the position.
+
+Both are folded into the single `offset` argument that `carriagePosition` and
+`carriageReadings` share, so the forward and reverse directions cannot disagree about them.
+
 **Standover** (A–H) translates both horizontal masts along a single axis that leans back
 from vertical — 20 mm per letter *measured along that axis*, at a 4° lean. So each letter
 is 19.95 mm up and 1.40 mm back, and A→H is 139.7 up and 9.8 back. The rearward part is
@@ -146,7 +161,10 @@ in `js/model/` reads the current `state`. Only `js/ui/*` touches the DOM.
 The side view draws **two** front ends: the best option out of the catalogue, and — as a
 dashed ghost — what the bike is wearing today. Only the first was drawn originally, which
 reads as a description of the bike rather than a proposal; the gap between the two bar clamps
-is the change being asked for. Its reach figures are to the bar *clamp*, with the hoods drawn
+is the change being asked for. The ghost's numbers are captioned at the top rather than
+labelled beside it, because when the answer *is* the current build — which is what applying
+the reverse direction's readings gives you — the two front ends coincide and two sets of
+labels landed on the same point. Its reach figures are to the bar *clamp*, with the hoods drawn
 a bar reach further forward, because that is the number you would compare against a bike you
 have measured.
 
@@ -180,6 +198,8 @@ Names used throughout, in case a term is unfamiliar:
 | `headTubeAngle` / `seatTubeAngle` | The usual chart angles. Lower is slacker. |
 | `headsetStack` | Height of the upper headset cover. Spacers start on top of it, so it shifts the answer by exactly its own height. |
 | `stemClampHeight` | Full height of the stem's steerer clamp. Half sits above the spacers to reach the bar clamp centreline. |
+| `stemLength` / `stemAngle` / `stemHeight` (on `fitBike`) | The fit bike's own front end, above and ahead of the bar carriage's zero point. Angle is measured off perpendicular to the column, the way stems are labelled, so a 0 on a 76° column still rises 14°. Height is the stem's own, and half of it is how far up the column the bar clamp centreline sits. |
+| `barClampOffset` | Those three turned into a displacement from the carriage zero to the bar clamp centre. |
 | `spacerHeight` | The spacer stack under the stem, in mm rather than a count. |
 | `exposedSteerer` | Steerer standing proud of the headset cover — top of the cover to the top of the steerer, which is a length you can put a ruler on. |
 | `spacerRoom` | `exposedSteerer` less `stemClampHeight`: how much spacer is actually left once the stem has taken its share. This is the solver's ceiling. It replaced a stored `spacersAvailable`, which read as though it were measurable and so got filled in with figures smaller than the stack the bike was already wearing — quietly hiding the options that fit. |
@@ -208,7 +228,7 @@ python3 -m http.server 8000
 # then open http://localhost:8000/tests/
 ```
 
-It runs all three suites and prints a tally (282 checks at the time of writing). Each
+It runs all three suites and prints a tally (313 checks at the time of writing). Each
 suite is also a standalone page if you want to read one in isolation.
 
 | Suite | Covers |
@@ -251,8 +271,10 @@ Section 1 separates two different kinds of number, which is worth preserving:
 - **Fit bike constants** — the collapsed panel: where each carriage's zero sits, which way
   its slides run, and the standover mechanism. Measured once off the machine.
 
-`railsBelowSaddleTop` (40) and `noseToRailCentre` (125) are measured off the saddle rather
-than off the bike, so they only hold while that saddle is the one being ridden. Both are
+`stemLength`, `stemAngle` and `stemHeight` (90 / −7 / 40) describe the stock front end and
+only hold while it is fitted. `railsBelowSaddleTop` (40) and `noseToRailCentre` (125) are
+measured off the saddle rather than off the bike, so they only hold while that saddle is the
+one being ridden. Both are
 single values covering the fit bike and every frame: the page matches *rail* positions, so a different
 saddle on the target bike still gets its rails in the right place, but its top would sit
 higher or lower by the difference in shell stack and nothing here knows that.

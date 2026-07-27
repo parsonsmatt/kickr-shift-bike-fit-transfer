@@ -9,7 +9,8 @@
 import { state, adoptState, defaultState } from '../js/state.js';
 import { createFrame, barClampPosition, railClampPosition, steererUp, asBuiltPositions,
          spacerRoom, asBuiltOverflowsSteerer } from '../js/model/frame.js';
-import { carriagePosition, carriageReadings, targetPositions, standoverOffsetFor, saddleOffsetFor, standoverTravelFor, scaleLimit, readingOnScale } from '../js/model/fit-bike.js';
+import { carriagePosition, carriageReadings, targetPositions, standoverOffsetFor, saddleOffsetFor,
+         barOffsetFor, barClampOffset, standoverTravelFor, scaleLimit, readingOnScale } from '../js/model/fit-bike.js';
 import { trainerSetups, lowestStandoverSetup } from '../js/model/reverse.js';
 import { standoverOffset, STANDOVER_POSITIONS } from '../js/model/standover.js';
 import { stemSolutions, bestStemSolution, saddleSetup, targetBarClamp, targetRailClamp, fitSpacerHeight, needsNegativeSpacers } from '../js/model/solver.js';
@@ -33,10 +34,28 @@ function reset() {
   adoptState(defaultState());
   state.readings = { standover: 'A', saddleHeight: 0, saddleForeAft: 0, barHeight: 0, barReach: 0 };
 }
-/** Put a carriage's zero exactly on `point`, so zero readings target that point. */
+/** Set a carriage up so that zero readings put its *target point* on `point`. */
 function aimCarriageAt(name, point) {
   state.carriages[name] = { zeroX: point[0], zeroY: point[1], mastAngle: 90,
     mastMmPerUnit: 10, slideTilt: 0, slideMmPerUnit: 10 };
+  // The bar carriage does not locate the bar clamp — the fit bike's own front end stands above
+  // and ahead of it — so back its zero off by that. Computed after the assignment above, since
+  // the front end is measured off this carriage's mast angle.
+  if (name === 'bar') {
+    const front = barClampOffset();
+    state.carriages.bar.zeroX -= front[0];
+    state.carriages.bar.zeroY -= front[1];
+  }
+}
+
+/** The front end worked out by hand, to check the model's own against. */
+function frontEndByHand(length, angle, stemHeight) {
+  const column = state.carriages.bar.mastAngle * Math.PI / 180;
+  const bearing = (90 - state.carriages.bar.mastAngle + angle) * Math.PI / 180;
+  return [
+    (stemHeight / 2) * -Math.cos(column) + length * Math.cos(bearing),
+    (stemHeight / 2) * Math.sin(column) + length * Math.sin(bearing),
+  ];
 }
 
 try {
@@ -71,6 +90,62 @@ near('bar rose with the rise', atH.bar[1] - atA.bar[1], toH[1], 1e-9);
 // A vertical axis is the degenerate case, and must be exactly vertical.
 near('a 0 degree lean has no rearward part', standoverOffset('H', 20, 0)[0], 0, 1e-12);
 near('a 0 degree lean rises the full travel', standoverOffset('H', 20, 0)[1], 140, 1e-12);
+
+/* ================ 1b. the fit bike has a front end of its own ================ */
+// The bar carriage's zero is measured to the column, at the top of the clamp the stem sits on.
+// The bar clamp is half a stem height up the column from there and then a stem length forward,
+// and leaving all of that out made every frame's stem answer short by about a stem length.
+log.push('== fit bike front end');
+reset();
+const wholeFrontEnd = frontEndByHand(90, -7, 40);
+near('the model agrees with the arithmetic, forward', barClampOffset()[0], wholeFrontEnd[0], 1e-9);
+near('and up', barClampOffset()[1], wholeFrontEnd[1], 1e-9);
+note('stock front end', barClampOffset().map(v => Math.round(v * 10) / 10));
+check('the stock front end is worth most of a stem length forward', barClampOffset()[0] > 80);
+check('and a good 30mm up', barClampOffset()[1] > 28);
+
+const withFrontEnd = targetPositions().bar;
+state.fitBike.stemLength = 0;
+state.fitBike.stemHeight = 0;
+const atTheCarriage = targetPositions().bar;
+near('the target moves with it, forward', withFrontEnd[0] - atTheCarriage[0], wholeFrontEnd[0], 1e-9);
+near('and up', withFrontEnd[1] - atTheCarriage[1], wholeFrontEnd[1], 1e-9);
+
+// The two moves are separable, and the first one is up the column - so it goes back a little
+// as well as up, exactly as spacers do on a frame.
+reset();
+state.fitBike.stemLength = 0;
+const columnOnly = barClampOffset();
+near('half the stem height up a 76 degree column', Math.hypot(columnOnly[0], columnOnly[1]), 20, 1e-9);
+check('which is up and back, not straight up', columnOnly[0] < 0 && columnOnly[1] > 19);
+near('along the column axis exactly',
+  columnOnly[0] / columnOnly[1], steererUp(state.carriages.bar.mastAngle)[0] / steererUp(state.carriages.bar.mastAngle)[1], 1e-9);
+
+// The angle convention is the frame's: off perpendicular to the column, not off horizontal.
+reset();
+state.fitBike.stemHeight = 0;
+state.fitBike.stemLength = 100;
+state.fitBike.stemAngle = 0;
+near('a 0 degree stem rises on a column leaning 14 degrees off vertical',
+  barClampOffset()[1], 100 * Math.sin(14 * Math.PI / 180), 1e-9);
+state.carriages.bar.mastAngle = 90;
+near('and is exactly level on a vertical column', barClampOffset()[1], 0, 1e-9);
+near('with its whole length forward', barClampOffset()[0], 100, 1e-9);
+state.fitBike.stemAngle = 90;
+near('straight up is straight up', barClampOffset()[1], 100, 1e-9);
+near('and nothing forward', barClampOffset()[0], 0, 1e-12);
+
+// It has to live in the offset both directions take, or the reverse solve would hand back
+// readings that do not reproduce the position it was given.
+reset();
+const wantedPoint = [420, 620];
+const inverted = carriageReadings(state.carriages.bar, wantedPoint, barOffsetFor('E'));
+const backAgain = carriagePosition(state.carriages.bar, inverted.mastReading, inverted.slideReading, barOffsetFor('E'));
+near('the bar offset inverts exactly in x', backAgain[0], wantedPoint[0], 1e-9);
+near('and in y', backAgain[1], wantedPoint[1], 1e-9);
+check('the front end is part of that offset, not just the standover rise',
+      barOffsetFor('E')[0] - standoverOffsetFor('E')[0] > 80 &&
+      barOffsetFor('E')[1] - standoverOffsetFor('E')[1] > 28);
 
 /* ================ 2. the stem solver hits a reachable target exactly ================ */
 log.push('== stem solver');
