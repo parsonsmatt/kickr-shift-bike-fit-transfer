@@ -14,13 +14,12 @@
 import { state } from '../state.js';
 import { asBuiltPositions } from './frame.js';
 import { STANDOVER_POSITIONS } from './standover.js';
-import { carriageReadings, offScaleReadings, standoverOffsetFor } from './fit-bike.js';
+import { carriageReadings, offScaleReadings, standoverOffsetFor, saddleOffsetFor } from './fit-bike.js';
 
 /** The four readings that reproduce `positions` with the standover at `letter`. */
 export function readingsFor(positions, letter) {
-  const offset = standoverOffsetFor(letter);
-  const saddle = carriageReadings(state.carriages.saddle, positions.saddle, offset);
-  const bar = carriageReadings(state.carriages.bar, positions.bar, offset);
+  const saddle = carriageReadings(state.carriages.saddle, positions.saddle, saddleOffsetFor(letter));
+  const bar = carriageReadings(state.carriages.bar, positions.bar, standoverOffsetFor(letter));
   if (!saddle || !bar) return null;
 
   return {

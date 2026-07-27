@@ -49,6 +49,16 @@ export function renderScaleHints() {
   select('[data-hint-for="standoverRise"]').textContent =
     `0 is straight up. Each letter then moves ${oneDecimal(perLetter[1])}mm up and ` +
     `${oneDecimal(-perLetter[0])}mm back.`;
+
+  // This one is worth more than a label, because it comes off every frame's answer at full
+  // size and there is nothing else on the page that would give away a wrong value.
+  const railOffset = state.fitBike.saddleRailOffset;
+  select('[data-hint-for="saddleRailOffset"]').textContent = !railOffset
+    ? 'Clamped at rail centre. Measure from the rail centre to where the clamp actually grips - ' +
+      'positive is back - or every frame gets its saddle put out by that much.'
+    : `The clamp grips ${oneDecimal(Math.abs(railOffset))}mm ` +
+      `${railOffset > 0 ? 'ahead of' : 'behind'} the rail centre, so the saddle sits that far ` +
+      `${railOffset > 0 ? 'back' : 'forward'} of the carriage. Every frame's saddle target moves with it.`;
 }
 
 const CARRIAGE_PANELS = [

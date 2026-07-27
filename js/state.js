@@ -82,6 +82,10 @@ export function defaultState() {
       crankLength: 170,
       railsBelowSaddleTop: 50,
       noseToRailCentre: 125,
+      // How far back on its own rails the saddle is clamped on the fit bike. Same sign as a
+      // frame's builtRailOffset: positive is back. 0 means clamped at rail centre, which is
+      // what the app assumed before this existed.
+      saddleRailOffset: 0,
       barReach: 100, // the stock Kickr bar
       matchMode: 'clamp', // 'clamp' = same bar on both bikes, 'hoods' = correct for bar reach
     },

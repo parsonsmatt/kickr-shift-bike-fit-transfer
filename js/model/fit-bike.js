@@ -131,15 +131,18 @@ export function carriageReadings(carriage, position, offset = [0, 0]) {
 }
 
 /**
- * The two points to reproduce on a real frame, from the readings currently entered:
- * the saddle rail clamp centre and the bar clamp centre.
+ * The two points to reproduce on a real frame, from the readings currently entered: the
+ * centre of the saddle's rails and the bar clamp centre.
+ *
+ * Both carriages take the standover rise. The saddle carriage takes one thing more — see
+ * `saddleOffsetFor`.
  */
 export function targetPositions() {
   const { readings, carriages } = state;
-  const offset = standoverOffsetFor(readings.standover);
+  const rise = standoverOffsetFor(readings.standover);
   return {
-    saddle: carriagePosition(carriages.saddle, readings.saddleHeight, readings.saddleForeAft, offset),
-    bar: carriagePosition(carriages.bar, readings.barHeight, readings.barReach, offset),
+    saddle: carriagePosition(carriages.saddle, readings.saddleHeight, readings.saddleForeAft, saddleOffsetFor(readings.standover)),
+    bar: carriagePosition(carriages.bar, readings.barHeight, readings.barReach, rise),
   };
 }
 
@@ -149,6 +152,25 @@ export const standoverOffsetFor = value =>
   standoverOffset(value, state.fitBike.standoverStepMm, state.fitBike.standoverRiseBackDegrees);
 
 export const standoverTravelFor = value => standoverTravel(value, state.fitBike.standoverStepMm);
+
+/**
+ * The saddle carriage's offset: the standover rise, plus however far back on its own rails the
+ * saddle is clamped on the fit bike.
+ *
+ * The carriage locates the *clamp*; what has to be reproduced on a real frame is where the
+ * saddle itself ends up, which is its rail centre. Those are the same point only when the
+ * saddle is clamped at rail centre, and the app used to assume they always were — so a saddle
+ * slid 20mm back on the fit bike put every frame's saddle 20mm too far forward. Applied
+ * horizontally only, like a frame's own `railOffset`: rails are near enough level over the
+ * 20-30mm of travel involved.
+ *
+ * Folding it into the offset both `carriagePosition` and `carriageReadings` take means the
+ * forward and reverse directions cannot disagree about it.
+ */
+export const saddleOffsetFor = letter => {
+  const rise = standoverOffsetFor(letter);
+  return [rise[0] - state.fitBike.saddleRailOffset, rise[1]];
+};
 
 export const activeStandover = () => normaliseStandover(state.readings.standover);
 

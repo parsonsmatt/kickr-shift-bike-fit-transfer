@@ -9,7 +9,7 @@
 import { state, adoptState, defaultState } from '../js/state.js';
 import { createFrame, barClampPosition, railClampPosition, steererUp, asBuiltPositions,
          spacerRoom, asBuiltOverflowsSteerer } from '../js/model/frame.js';
-import { carriagePosition, carriageReadings, targetPositions, standoverOffsetFor, standoverTravelFor, scaleLimit, readingOnScale } from '../js/model/fit-bike.js';
+import { carriagePosition, carriageReadings, targetPositions, standoverOffsetFor, saddleOffsetFor, standoverTravelFor, scaleLimit, readingOnScale } from '../js/model/fit-bike.js';
 import { trainerSetups, lowestStandoverSetup } from '../js/model/reverse.js';
 import { standoverOffset, STANDOVER_POSITIONS } from '../js/model/standover.js';
 import { stemSolutions, bestStemSolution, saddleSetup, targetBarClamp, targetRailClamp, fitSpacerHeight, needsNegativeSpacers } from '../js/model/solver.js';
@@ -207,6 +207,39 @@ near('clamp mode ignores the bar reach', clampModeTarget[0], targetBarClamp({ ..
 near('hood mode pulls a longer-reach bar back by the difference',
   targetBarClamp({ ...frame, barReach: 95 })[0], clampModeTarget[0] - 20, 1e-9);
 
+/* ======= 4b. where the saddle sits on the fit bike's own rails ======= */
+log.push('== saddle on its rails');
+reset();
+state.readings = { standover: 'A', saddleHeight: 15, saddleForeAft: 7, barHeight: 6, barReach: 12 };
+
+// The carriage locates the clamp; what has to be reproduced is where the saddle ends up. Slide
+// the saddle back on the rails and the saddle target goes back with it, one for one.
+state.fitBike.saddleRailOffset = 0;
+const centred = targetPositions();
+state.fitBike.saddleRailOffset = 20;
+const slidBack = targetPositions();
+near('sliding the saddle back moves the saddle target back by the same amount',
+     centred.saddle[0] - slidBack.saddle[0], 20, 1e-9);
+near('and does not move it up or down', slidBack.saddle[1], centred.saddle[1], 1e-12);
+near('and leaves the bar target where it was', slidBack.bar[0], centred.bar[0], 1e-12);
+check('the offset rides on the saddle carriage, not the standover rise',
+      Math.abs(saddleOffsetFor('A')[0] - standoverOffsetFor('A')[0] + 20) < 1e-12);
+near('a negative value means slid forward', (state.fitBike.saddleRailOffset = -15, targetPositions().saddle[0]),
+     centred.saddle[0] + 15, 1e-9);
+
+// It has to come out of the frame's own rail offset at full size: both figures are measured
+// from the same saddle's rail centre, so 20mm back on the fit bike is 20mm back on the frame.
+reset();
+const railed = createFrame('Railed', '56');
+state.frames = [railed];
+state.readings = { standover: 'A', saddleHeight: 15, saddleForeAft: 7, barHeight: 6, barReach: 12 };
+state.fitBike.saddleRailOffset = 0;
+const offsetCentred = saddleSetup(railed).railOffset;
+state.fitBike.saddleRailOffset = 20;
+near('20mm back on the fit bike is 20mm back on the frame',
+     saddleSetup(railed).railOffset - offsetCentred, 20, 1e-9);
+state.fitBike.saddleRailOffset = 0;
+
 /* ================ 5. reverse: a real bike back to fit bike readings ================ */
 // The strong claim: type the readings this produces into section 1 and the target lands
 // back on the as-built position. Checked against the machine's measured constants, not a
@@ -220,6 +253,9 @@ Object.assign(ridden, {
   builtSaddleHeight: 720, builtRailOffset: 5,
 });
 state.frames = [ridden];
+// Deliberately not zero: the saddle rail offset has to be inverted along with everything else,
+// and a direction sign error there would cancel out at 0.
+state.fitBike.saddleRailOffset = 18;
 
 // The real machine's two mast maximums are measured, and this block is about what happens
 // with and without them, so start from unmeasured and put each one in deliberately.

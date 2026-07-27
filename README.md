@@ -189,7 +189,8 @@ Names used throughout, in case a term is unfamiliar:
 | `reachable` | The solution needs no negative spacers and no more than `spacerRoom` allows. |
 | `mastMaxReading` / `slideMaxReading` | How far a scale actually goes, in scale units — the top of the seatpost mast's travel, the front column's rise, and the same for the two horizontal slides. **0 means not measured**, and is treated as no upper limit rather than as a zero-length scale. |
 | `needsNegativeSpacers` | The bar would have to sit below the frame's own slammed height. Not a build, so the stem table leaves these out entirely rather than printing a negative spacer stack. If a frame has nothing left, the card says how far above the target its closest option still sits. The model keeps them — the ranking already sorts them last — so only the display filters. |
-| `railClamp` | Centre of the saddle rail clamp — what the fit bike's saddle carriage actually locates. |
+| `railClamp` | Where the saddle's rails sit — the point both sides match. On a frame it is the post's clamp axis shifted back by `railOffset`; on the fit bike it is the saddle carriage shifted back by `saddleRailOffset`. |
+| `saddleRailOffset` | How far back on its own rails the saddle is clamped **on the fit bike**. The carriage locates the clamp, not the saddle, and those are the same point only at rail centre — so this comes off every frame's saddle answer at full size. Same sign as a frame's `railOffset`: positive is back. It is folded into the offset that `carriagePosition` and `carriageReadings` both take, so the forward and reverse directions cannot disagree about it. |
 | `railsBelowSaddleTop` | Saddle shell stack: rail centre to the top of the saddle. |
 | `railOffset` | How far back from rail centre the saddle must slide, after the fitted post's setback is used up. |
 | `heightAlongSeatAxis` | Saddle height as you would measure it *on that frame* — differs from the fit bike's number whenever the seat angle does. |
@@ -207,7 +208,7 @@ python3 -m http.server 8000
 # then open http://localhost:8000/tests/
 ```
 
-It runs all three suites and prints a tally (266 checks at the time of writing). Each
+It runs all three suites and prints a tally (279 checks at the time of writing). Each
 suite is also a standalone page if you want to read one in isolation.
 
 | Suite | Covers |

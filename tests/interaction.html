@@ -113,6 +113,33 @@ try {
   check('each setup field appears exactly once',
         $$('[data-fit-bike="crankLength"]').length + $$('[data-fit-bike="barReach"]').length, 2);
 
+  /* ---- 2e. where the saddle sits on the fit bike's own rails ---- */
+  // The carriage locates the clamp, so this is the difference between the clamp and the saddle.
+  // It comes off every frame's saddle answer at full size, which is why it is not buried in the
+  // constants panel: it is set on the bike, not measured off it once.
+  const railOffsetField = $('[data-fit-bike="saddleRailOffset"]');
+  check('the rail offset is on the form, not in the constants panel',
+        !!railOffsetField && !railOffsetField.closest('details'), true);
+  check('it starts at rail centre', railOffsetField.value, '0');
+  check('and says what to do about that',
+        /Clamped at rail centre/.test($('[data-hint-for="saddleRailOffset"]').textContent), true);
+
+  const saddleTargetX = () => Number($$('#target-readout .v')[1].textContent);
+  // Fourth cell of the frame card's saddle readout: "Rail offset needed".
+  const frameRailOffset = () => Number($$('#frame-list .readout .v')[3].textContent);
+  const centredTargetX = saddleTargetX();
+  const centredFrameOffset = frameRailOffset();
+  type(railOffsetField, '20');
+  check('sliding the saddle back moves the saddle target back with it',
+        Math.abs(centredTargetX - saddleTargetX() - 20) < 0.05, true);
+  check('and asks the frame for the same 20mm of rail',
+        Math.abs(frameRailOffset() - centredFrameOffset - 20) < 0.05, true);
+  check('the hint reports which way round it is',
+        /grips 20\.0mm ahead of the rail centre, so the saddle sits that far back/
+          .test($('[data-hint-for="saddleRailOffset"]').textContent), true);
+  type(railOffsetField, '0');
+  check('back to centre restores the target', Math.abs(saddleTargetX() - centredTargetX) < 0.05, true);
+
   /* ---- 3. state is persisted, in the new schema ---- */
   await sleep(400);
   const saved = JSON.parse(localStorage.getItem('fit-transfer-v2'));

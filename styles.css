@@ -32,8 +32,9 @@ h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin:0 0 8px;c
 .cols3{grid-template-columns:repeat(3,1fr)}
 .cols4{grid-template-columns:repeat(4,1fr)}
 .cols5{grid-template-columns:repeat(5,1fr)}
-@media(max-width:900px){.cols3,.cols4,.cols5{grid-template-columns:1fr 1fr}}
-@media(max-width:600px){.cols2,.cols3,.cols4,.cols5{grid-template-columns:1fr}}
+.cols6{grid-template-columns:repeat(6,1fr)}
+@media(max-width:900px){.cols3,.cols4,.cols5,.cols6{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.cols2,.cols3,.cols4,.cols5,.cols6{grid-template-columns:1fr}}
 
 /* ---------- form controls ---------- */
 label{display:block;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin-bottom:3px}
