@@ -241,6 +241,36 @@ function asBuiltSection(frame, onChange) {
   );
 }
 
+/**
+ * Delete a frame. Asked about first: there is no undo, and the button on the card header is one
+ * mis-click away from the header itself, which is what opens and closes the card.
+ */
+function removeFrame(frame, onChange) {
+  const label = frame.name + (frame.size ? ' ' + frame.size : '');
+  const confirmed = confirm(`Delete ${label}? Its geometry and as-built figures go with it.`);
+  if (!confirmed) return;
+  state.frames = state.frames.filter(other => other !== frame);
+  onChange();
+}
+
+/**
+ * The same delete, on the card header, so a frame can go without being opened first. The one at
+ * the bottom of the card is only reachable past the whole stem table, and a collapsed card had
+ * no way to remove it at all.
+ */
+function removeButton(frame, onChange) {
+  return element(
+    'button',
+    {
+      class: 'ghost tiny kill',
+      title: `Delete ${frame.name}`,
+      'aria-label': `Delete ${frame.name}`,
+      onclick: () => removeFrame(frame, onChange),
+    },
+    '\u00d7',
+  );
+}
+
 function frameActions(frame, onChange) {
   const duplicate = () => {
     const copy = { ...frame, id: newFrameId(), size: (frame.size || '') + ' copy' };
@@ -248,10 +278,7 @@ function frameActions(frame, onChange) {
     onChange();
   };
 
-  const remove = () => {
-    state.frames = state.frames.filter(other => other !== frame);
-    onChange();
-  };
+  const remove = () => removeFrame(frame, onChange);
 
   const action = (label, handler) => element('button', { class: 'ghost tiny', onclick: handler }, label);
 
@@ -300,7 +327,7 @@ export function renderFrames(onChange, onNameChange) {
           },
         },
         element('div', { class: 'name' }, frame.name, frame.size ? element('small', {}, frame.size) : null),
-        verdictLine(best),
+        element('div', { class: 'headright' }, verdictLine(best), removeButton(frame, onChange)),
       ),
     );
 

@@ -39,6 +39,11 @@ try {
   check('booted with one frame card', $('#frame-list').children.length, 1);
   check('status mentions this browser', /saves to this browser/.test($('#save-status').textContent), true);
 
+  // Everything destructive asks first, and an unanswered native dialog blocks the page for
+  // good in headless Chrome, so the answer is stubbed here rather than next to each click. The
+  // sections that care about declining override it themselves and put it back.
+  window.confirm = () => true;
+
   /* ---- 1. typing a reading moves the target readout ---- */
   const readoutValues = () => $$('#target-readout .v').map(n => n.textContent);
   const before = readoutValues();
@@ -261,7 +266,6 @@ try {
   check('nothing stores references any more', 'references' in JSON.parse(localStorage.getItem('fit-transfer-v2')), false);
 
   /* ---- 10. reset puts the constants back to the measured defaults ---- */
-  window.confirm = () => true;
   // Typed rather than poked into the state, so this also covers the redraw putting the
   // remembered keystrokes back over the value the reset just restored.
   type($('[data-path="carriages.bar.zeroX"]'), '999');
@@ -279,6 +283,30 @@ try {
   check('three frames after duplicate', $('#frame-list').children.length, 3);
   cardButtons('Remove')[0].click();
   check('two frames after removing one', $('#frame-list').children.length, 2);
+
+  // Removing has to be possible without opening the card first: the button at the bottom of an
+  // expanded card sits past the whole stem table, and a collapsed card had none at all.
+  const killButtons = () => $$('#frame-list .bike .head button.kill');
+  check('every card offers to delete itself from its header', killButtons().length, 2);
+  // Re-queried after every click: the whole page is rebuilt on each change, so a card held in a
+  // variable is a detached node that answers questions about how things used to be.
+  const cards = () => $$('#frame-list > .bike');
+  const deletedName = cards()[1].querySelector('.name').textContent;
+  cards()[1].querySelector('.head').click();
+  check('the second card is collapsed', cards()[1].querySelectorAll('input').length, 0);
+  check('and still offers to delete itself', !!cards()[1].querySelector('.head button.kill'), true);
+  cards()[1].querySelector('.head button.kill').click();
+  check('one frame left after deleting the collapsed one', $('#frame-list').children.length, 1);
+  check('and it is the other one',
+        $('#frame-list .name').textContent !== deletedName, true);
+
+  // Nothing goes without being asked about, since there is no undo.
+  window.confirm = () => false;
+  killButtons()[0].click();
+  check('a declined delete keeps the frame', $('#frame-list').children.length, 1);
+  window.confirm = () => true;
+  check('the header delete does not toggle the card open or shut on its way',
+        $$('#frame-list > .bike')[0].querySelectorAll('input').length > 0, true);
 
   /* ---- 12. hood match mode shifts the bar target ---- */
   const barTargetX = () => $$('#target-readout .v')[4].textContent;
